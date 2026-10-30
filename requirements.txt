@@ -1,0 +1,21 @@
+# Python 3.12
+
+# Agente y LLM
+langchain
+langchain-openai
+python-dotenv
+
+# API
+fastapi
+uvicorn
+
+# Tests
+pytest
+
+# --- Por decidir en el grupo (descomentar según corresponda) ---
+# STT: faster-whisper          (opción local)
+# Interfaz: gradio o streamlit (opción web)
+# Interfaz: python-telegram-bot (opción Telegram)
+# TTS: edge-tts
+# TTS: piper-tts
+# Calendario: google-api-python-client google-auth-oauthlib
