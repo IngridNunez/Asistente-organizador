@@ -75,8 +75,15 @@ pytest
 
 ## Flujo de trabajo
 
-- `main` siempre estable. Cambios en ramas `feature/nombre`.
-- Pull Request revisado antes de unir a `main`.
+Se utiliza una técnica de branches para el trabajo colaborativo:
+
+- `main`: siempre estable, lista para entregar/demostrar.
+- `develop`: rama de integración, donde se juntan los avances de todos antes
+  de pasar a `main`.
+- `feature/nombre`: cada persona trabaja su tarea en su propia rama, creada
+  desde `develop`.
+- Pull Request de `feature/nombre` -> `develop` revisado antes de unir.
+  `develop` -> `main` se hace cuando hay una versión estable para mostrar.
 - Tablero en GitHub Projects (Por hacer / En progreso / En revisión / Listo).
 - Reunión corta semanal.
 
