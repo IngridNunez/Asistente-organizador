@@ -5,6 +5,9 @@ langchain
 langchain-openai
 python-dotenv
 
+# STT: Whisper vía Groq (decidido)
+groq
+
 # API
 fastapi
 uvicorn
@@ -13,7 +16,6 @@ uvicorn
 pytest
 
 # --- Por decidir en el grupo (descomentar según corresponda) ---
-# STT: faster-whisper          (opción local)
 # Interfaz: gradio o streamlit (opción web)
 # Interfaz: python-telegram-bot (opción Telegram)
 # TTS: edge-tts

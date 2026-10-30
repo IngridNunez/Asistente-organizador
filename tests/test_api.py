@@ -7,6 +7,8 @@ from src.api.main import app
 client = TestClient(app)
 
 
+# Smoke test: confirma que el endpoint responde 200 y trae el campo esperado,
+# usando los stubs (no valida contenido real de transcripción/respuesta/voz).
 def test_conversar():
     audio = base64.b64encode(b"audio falso").decode()
     respuesta = client.post(

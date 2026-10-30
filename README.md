@@ -63,7 +63,7 @@ pytest
 - **Agente** (2): prompt, memoria y planificación con LangChain.
 - **Herramientas** (2): Google Calendar y acceso controlado al PC.
 - **Interfaz** (1): botón y pantalla de la app.
-- **Coordinación**: revisión de PRs e integración entre módulos.
+- **Coordinación e integración** (Ingrid): revisión de PRs e integración entre módulos.
 
 ## Etapas del proyecto
 
@@ -96,6 +96,5 @@ que cada equipo puede usar mientras el módulo real no está listo.
 ## Pendiente por decidir
 
 - Interfaz definitiva (web o Telegram).
-- STT definitivo (Whisper/Groq, faster-whisper local o Web Speech API).
 - Funciones de celular que se necesitan (define si hace falta una app Android).
-- Fecha de entrega: dentro de 8 semanas aprox. (ajustar cronograma de `docs/etapa1.md` en adelante).
+- Entrega estimada: dentro de 7 semanas aprox. (ajustar cronograma de `docs/etapa1.md` en adelante).
