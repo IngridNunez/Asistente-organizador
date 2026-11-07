@@ -48,11 +48,13 @@ cp .env.example .env   # completar con las claves reales
 ```
 
 Levantar la API:
+
 ```bash
 uvicorn src.api.main:app --reload
 ```
 
 Correr los tests:
+
 ```bash
 pytest
 ```

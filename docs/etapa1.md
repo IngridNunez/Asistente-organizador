@@ -22,20 +22,24 @@ a la otra.
 ## Grupo Voz
 
 **Persona A — STT**
+
 - [ ] Implementar `transcribir(audio) -> str` en `src/voz/stt.py` llamando a
       la API de Groq (`client.audio.transcriptions.create`).
 - [ ] Probar el reconocimiento con distintos audios (ruido, acentos, frases
       cortas/largas).
 
 **Persona B — TTS**
+
 - [ ] Elegir motor de TTS (edge-tts o Piper).
 - [ ] Implementar `hablar(texto) -> bytes` en `src/voz/tts.py`.
 - [ ] Probar calidad y latencia de la voz generada.
 
 **Juntas:**
+
 - [ ] Probar el ciclo completo: grabar -> transcribir -> hablar -> escuchar.
 
 **Referencia (repo `Ingeniería de Soluciones con IA`):**
+
 - `RA1/IL1.1/1-groq_model_api.ipynb` — llamadas directas a la API de Groq
   (formato de respuesta, latencia) antes de decidir el STT.
 - `RA1/IL1.1/3-langchain_streaming.ipynb` — streaming de respuestas, útil si
@@ -44,6 +48,7 @@ a la otra.
 ## Grupo Agente
 
 **Persona A — Prompt y conexión LLM**
+
 - [ ] Armar el prompt base del asistente (tono, qué puede y no puede hacer).
 - [ ] Implementar la conexión LangChain + Groq (`openai/gpt-oss-120b`) y el
       esqueleto de `responder(texto, usuario_id) -> RespuestaAgente` en
@@ -52,14 +57,17 @@ a la otra.
       Herramientas no tenga lista la versión real.
 
 **Persona B — Memoria**
+
 - [ ] Agregar memoria de conversación simple (por `usuario_id`).
 - [ ] Probar que mantiene contexto entre 2-3 mensajes seguidos.
 
 **Juntas:**
+
 - [ ] Decidir en qué casos `responder()` debe devolver `accion_local` o
       `confirmacion_pendiente` (ver `docs/contratos.md`).
 
 **Referencia:**
+
 - `RA1/IL1.1/2-langchain_model_api.ipynb` — conexión base de LangChain con el
   modelo que van a usar en `responder()`.
 - `RA1/IL1.2/*` (zero-shot, few-shot, chain-of-thought, advanced-techniques) —
@@ -75,6 +83,7 @@ a la otra.
 ## Grupo Herramientas
 
 **Antes de separarse, acordar entre las dos personas:**
+
 - [ ] El mecanismo de confirmación a usar (`confirmacion_pendiente` de
       `RespuestaAgente`, ver `docs/contratos.md`) — ambas tracks lo van a
       necesitar, no debería inventarse dos veces.
@@ -84,6 +93,7 @@ a la otra.
       `docs/contratos.md` (una por persona) para no chocar en los merges.
 
 **Persona A — Calendario (etapa 2)**
+
 - [ ] Resolver el flujo de OAuth real de Google Calendar (credenciales,
       scopes, dónde queda guardado el token — documentarlo en
       `docs/seguridad.md`).
@@ -95,6 +105,7 @@ a la otra.
       función, mismo contrato).
 
 **Persona B — Acceso al PC (etapa 4, adelantado)**
+
 - [ ] Definir la allowlist de acciones permitidas sobre el PC (qué funciones
       existen, qué parámetros aceptan).
 - [ ] Implementar esas funciones en `src/herramientas/pc.py`, acotadas y sin
@@ -103,6 +114,7 @@ a la otra.
       integración completa con el agente se active recién en etapa 4.
 
 **Referencia:**
+
 - `RA2/IL2.1/2-agent-function-calling.ipynb` — cómo se conecta una tool al
   agente (aplica a ambas, Calendario y PC).
 - `RA1/IL1.3/4-vector-rag.ipynb` — si más adelante se decide construir una
@@ -117,6 +129,7 @@ a la otra.
       consumiendo `POST /conversar` de la API.
 
 **Referencia:**
+
 - `RA2/IL2.4/` (plantillas de documentación y diagramas de arquitectura) —
   para dejar registrada la decisión final (web vs. Telegram).
 
@@ -129,6 +142,7 @@ a la otra.
 - [ ] Armar el tablero en GitHub Projects con estas tareas como issues.
 
 **Referencia:**
+
 - `RA2/IL2.4/best-practices.md` y `architecture-guide.md` — para mantener
   consistencia en cómo se documentan los módulos a medida que se integran.
 
