@@ -1,6 +1,7 @@
 # Python 3.12
 
-# Agente y LLM
+# Agente y LLM (CrewAI orquesta; en Windows usar Python 3.12 en .venv)
+crewai==1.15.37
 langchain
 langchain-openai
 python-dotenv

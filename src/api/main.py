@@ -37,7 +37,7 @@ def conversar(req: ConversarRequest, authorization: str = Header(default="")):
 
     # Pipeline: voz -> texto -> respuesta del agente -> voz
     texto = transcribir_falso(audio)
-    texto_respuesta = responder_falso(texto, req.usuario_id)
+    texto_respuesta = responder_falso(texto, req.usuario_id).texto
     audio_respuesta = hablar_falso(texto_respuesta)
 
     return ConversarResponse(
