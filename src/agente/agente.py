@@ -21,6 +21,9 @@ MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
 
 log = logging.getLogger(__name__)
 
+# CrewAI loguea cada reintento y avisos de conteo de tokens: solo nos sirve nuestro propio log.
+logging.getLogger("crewai").setLevel(logging.CRITICAL)
+
 
 # Respuesta del agente (ver docs/contratos.md)
 class RespuestaAgente(BaseModel):
@@ -78,9 +81,9 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     )
     try:
         resultado = Crew(agents=[agente], tasks=[tarea], verbose=False, tracing=False).kickoff()
-    except Exception:
+    except Exception as e:
         # Groq caído, rate limit, etc.: el cliente de voz recibe un mensaje, no una traza.
-        log.exception("Falló la llamada al agente")
+        log.error("Falló la llamada al agente (Groq): %s", e)
         return RespuestaAgente(texto="Tuve un problema para responder. Intenta de nuevo en un momento.")
     return RespuestaAgente(texto=resultado.raw)
 
