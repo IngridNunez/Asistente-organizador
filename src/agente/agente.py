@@ -1,18 +1,19 @@
 import logging
 import os
 from datetime import datetime
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+from src.agente.prompt import ZONA_HORARIA, construir_prompt_sistema
+
+if TYPE_CHECKING:
+    from crewai import LLM
+
 # Sin telemetría: el texto del usuario no debe salir a más servicios que Groq (docs/seguridad.md)
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
-
-from crewai import LLM, Agent, Crew, Task  # noqa: E402
-
-from src.agente.prompt import ZONA_HORARIA, construir_prompt_sistema  # noqa: E402
-from src.agente.tools import TOOLS_AGENTE  # noqa: E402
 
 load_dotenv()
 
@@ -29,7 +30,9 @@ class RespuestaAgente(BaseModel):
 
 
 # Crea el LLM de Groq (API compatible con OpenAI). Falla claro si falta configuración.
-def _crear_llm() -> LLM:
+def _crear_llm() -> "LLM":
+    from crewai import LLM
+
     api_key = os.getenv("GROQ_API_KEY")
     base_url = os.getenv("GROQ_BASE_URL")
     if not api_key or not base_url:
@@ -48,6 +51,16 @@ def _crear_llm() -> LLM:
 def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     if not texto.strip():
         return RespuestaAgente(texto="No te escuché bien. ¿Me lo repites?")
+
+    # crewai se importa aquí (pesado): la API con stubs y pytest no lo necesitan.
+    try:
+        from crewai import Agent, Crew, Task
+
+        from src.agente.tools import TOOLS_AGENTE
+    except ImportError as e:
+        raise RuntimeError(
+            "Falta crewai: activa .venv con Python 3.12 y corre pip install -r requirements.txt"
+        ) from e
 
     ahora = datetime.now(ZoneInfo(ZONA_HORARIA))
     agente = Agent(
