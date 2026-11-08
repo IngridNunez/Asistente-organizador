@@ -2,6 +2,9 @@
 
 # Agente y LLM (CrewAI orquesta; en Windows usar Python 3.12 en .venv)
 crewai==1.15.37
+# Los usan los demás grupos (Persona B, herramientas); este módulo solo usa crewai
+langchain==1.4.9
+langchain-openai==1.7.4
 python-dotenv==1.2.4
 
 # STT: Whisper vía Groq (decidido)
