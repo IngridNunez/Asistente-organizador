@@ -56,6 +56,19 @@ def test_base64_invalido():
     assert respuesta.status_code == 400
 
 
+def test_base64_con_saltos_de_linea():
+    # encodebytes inserta "\n" cada 76 caracteres, como Android con Base64.DEFAULT
+    largo = base64.encodebytes(b"x" * 200).decode()
+    cuerpo = {**CUERPO, "audio_base64": largo}
+    respuesta = client.post("/conversar", json=cuerpo, headers=CABECERA)
+    assert respuesta.status_code == 200
+
+
+def test_sin_token_gana_sobre_un_body_invalido():
+    cuerpo = {**CUERPO, "usuario_id": "../x"}
+    assert client.post("/conversar", json=cuerpo).status_code == 401
+
+
 def test_audio_demasiado_grande():
     cuerpo = {**CUERPO, "audio_base64": "A" * (MAX_AUDIO_BASE64 + 1)}
     respuesta = client.post("/conversar", json=cuerpo, headers=CABECERA)

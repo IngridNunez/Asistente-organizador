@@ -3,7 +3,7 @@ import binascii
 import hmac
 import os
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 # Hoy se importan las versiones "_falso": cada grupo las reemplaza por las
@@ -33,7 +33,7 @@ class ConversarResponse(BaseModel):
 
 # Exige "Authorization: Bearer <API_AUTH_TOKEN>". Falla cerrado: sin token configurado
 # no se atiende a nadie, salvo API_AUTH_DISABLED=true (solo desarrollo local).
-def _verificar_token(authorization: str) -> None:
+def _verificar_token(authorization: str = Header(default="")) -> None:
     if os.getenv("API_AUTH_DISABLED", "").lower() in ("1", "true", "yes"):
         return
     token_esperado = os.getenv("API_AUTH_TOKEN")
@@ -46,14 +46,18 @@ def _verificar_token(authorization: str) -> None:
         raise HTTPException(status_code=401, detail="No autorizado")
 
 
-# Endpoint principal: recibe audio, devuelve texto y audio de respuesta
-@app.post("/conversar", response_model=ConversarResponse)
-def conversar(req: ConversarRequest, authorization: str = Header(default="")):
-    _verificar_token(authorization)
-
-    # audio llega en base64 (JSON no soporta bytes crudos)
+# Endpoint principal: recibe audio, devuelve texto y audio de respuesta.
+# La dependencia del token corre antes de validar el body: sin token válido siempre es 401/503.
+@app.post(
+    "/conversar",
+    response_model=ConversarResponse,
+    dependencies=[Depends(_verificar_token)],
+)
+def conversar(req: ConversarRequest):
+    # audio llega en base64 (JSON no soporta bytes crudos). Se quitan espacios y saltos de línea:
+    # Android con Base64.DEFAULT inserta "\n" cada 76 caracteres.
     try:
-        audio = base64.b64decode(req.audio_base64, validate=True)
+        audio = base64.b64decode("".join(req.audio_base64.split()), validate=True)
     except binascii.Error:
         raise HTTPException(status_code=400, detail="audio_base64 inválido")
 
