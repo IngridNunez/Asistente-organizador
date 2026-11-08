@@ -24,6 +24,7 @@ def transcribir(audio: bytes) -> str:
 def hablar(texto: str) -> bytes:
     """Recibe texto y devuelve audio (bytes, ej. wav/mp3) listo para reproducir."""
 ```
+
 Archivo: `src/voz/`
 
 ## Agente
@@ -41,7 +42,19 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     ejecuta el razonamiento y las herramientas necesarias,
     y devuelve texto + (opcional) acción local o confirmación pendiente."""
 ```
+
 Archivo: `src/agente/`
+
+Internamente `responder()` usa CrewAI (Agent, Task, Crew) con Groq como LLM, y
+expone las herramientas de calendario con `@tool` de `crewai.tools` en
+`src/agente/tools.py`. La firma de `responder()` no cambia por esto.
+
+Crear un evento requiere confirmación y la impone el código, no el modelo: la
+tool `proponer_evento_calendario` no crea nada, solo deja la propuesta en
+`src/agente/confirmacion.py` y `responder()` devuelve su id en
+`confirmacion_pendiente`. En el turno siguiente, un "sí" explícito del usuario
+ejecuta el evento; un "no", cualquier otro mensaje o 5 minutos de espera lo
+descartan. `accion_local` sale siempre en `None` por ahora.
 
 El agente nunca ejecuta directamente una acción sobre el PC: solo la propone en
 `accion_local`. Quien la ejecuta de verdad es la capa de herramientas/cliente,
@@ -67,6 +80,7 @@ def crear_evento_calendario(titulo: str, inicio: str, fin: str) -> str:
 def listar_eventos(desde: str, hasta: str) -> list[dict]:
     """Devuelve los eventos entre dos fechas (ISO 8601)."""
 ```
+
 Archivo: `src/herramientas/`
 
 Toda acción sobre el PC (etapa 4) debe ser una función específica y acotada
@@ -74,11 +88,12 @@ Toda acción sobre el PC (etapa 4) debe ser una función específica y acotada
 
 ## API (FastAPI)
 
-```
+```py
 POST /conversar
   body: { "audio_base64": str, "usuario_id": str }
   respuesta: { "texto_respuesta": str, "audio_base64": str }
 ```
+
 Internamente encadena: `transcribir -> responder -> hablar`. El `texto` de
 `RespuestaAgente` es lo que se pasa a `hablar()`; si `responder` devuelve
 `accion_local` o `confirmacion_pendiente`, por ahora (etapas 1-4, agente local)
@@ -88,6 +103,7 @@ Archivo: `src/api/`
 ## Interfaz (cliente, PC o celular)
 
 El cliente solo necesita:
+
 1. Grabar audio al apretar el botón.
 2. Mandarlo a la API (`POST /conversar`).
 3. Reproducir el audio de respuesta.
