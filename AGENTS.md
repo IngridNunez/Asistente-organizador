@@ -6,13 +6,13 @@ Guía para agentes de desarrollo en este repositorio. Detalle completo en `READM
 
 Asistente personal de voz (tipo Siri/Alexa), proyecto final del track de IA de DUOC (curso "Ingeniería de Soluciones con Inteligencia Artificial"). Flujo: botón -> grabar voz -> STT -> agente (LLM + herramientas) -> TTS.
 
-- **Stack:** Python 3.12, FastAPI, LangChain + Groq (LLM `openai/gpt-oss-120b`, STT Whisper `whisper-large-v3-turbo`), pytest.
+- **Stack:** Python 3.12, FastAPI, CrewAI + Groq (LLM `openai/gpt-oss-120b`, STT Whisper `whisper-large-v3-turbo`), pytest.
 - **Repo de referencia del curso** (ejemplos de Groq, LangChain, agentes): `..\Ingenier-a-de-Soluciones-con-Inteligencia-Artificial` (`RA1/IL1.1`, `RA2`, `RA3`).
 
 ## 2. Estructura
 
 - `src/voz/` — `transcribir(audio: bytes) -> str`, `hablar(texto: str) -> bytes` (+ versiones `_falso`).
-- `src/agente/` — `responder(texto, usuario_id) -> RespuestaAgente` (prompt, memoria, LangChain).
+- `src/agente/` — `responder(texto, usuario_id) -> RespuestaAgente` (prompt, memoria, CrewAI).
 - `src/herramientas/` — tools de LangChain: calendario, acceso acotado al PC.
 - `src/api/` — FastAPI, `POST /conversar` encadena `transcribir -> responder -> hablar`.
 - `src/interfaz/` — botón y pantalla (web o Telegram, por decidir).
@@ -22,12 +22,16 @@ Asistente personal de voz (tipo Siri/Alexa), proyecto final del track de IA de D
 ## 3. Comandos
 
 ```bash
-python -m venv .venv && .venv\Scripts\activate
+uv venv --python 3.12 .venv   # sin uv: py -3.12 -m venv .venv (hay que tener Python 3.12 instalado)
+.venv\Scripts\activate
+python --version              # debe decir 3.12.x, si no, el venv está mal
 pip install -r requirements.txt
 cp .env.example .env          # completar claves reales
 uvicorn src.api.main:app --reload
 pytest
 ```
+
+Python 3.12 es obligatorio: `crewai` no instala en 3.14 o superior. Abre cada terminal nueva con el venv activo (`.venv\Scripts\activate`); sin él se usa el Python global y fallan `pytest` y `uvicorn`.
 
 ## 4. Reglas del proyecto
 
