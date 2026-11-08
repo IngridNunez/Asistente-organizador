@@ -2,19 +2,18 @@
 
 # Agente y LLM (CrewAI orquesta; en Windows usar Python 3.12 en .venv)
 crewai==1.15.37
-langchain
-langchain-openai
-python-dotenv
+python-dotenv==1.2.4
 
 # STT: Whisper vía Groq (decidido)
-groq
+groq==1.7.0
 
 # API
-fastapi
-uvicorn
+fastapi==0.162.2
+uvicorn==0.54.0
 
-# Tests
-pytest
+# Tests (httpx lo necesita el TestClient de FastAPI)
+pytest==9.2.0
+httpx==0.28.1
 
 # --- Por decidir en el grupo (descomentar según corresponda) ---
 # Interfaz: gradio o streamlit (opción web)
