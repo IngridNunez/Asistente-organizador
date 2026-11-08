@@ -71,7 +71,7 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
 
     # crewai se importa aquí (pesado): la API con stubs y pytest no lo necesitan.
     try:
-        from crewai import Agent, Crew, Task
+        from crewai import Agent, Crew, CrewOutput, Task
 
         from src.agente.tools import construir_tools
     except ImportError as e:
@@ -104,12 +104,16 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     except Exception as e:
         # Groq caído, rate limit, etc.: el cliente de voz recibe un mensaje, no una traza.
         log.error("Falló la llamada al agente (Groq): %s", e)
-        confirmacion.descartar(usuario_id)  # no dejar una propuesta que el usuario nunca vio
+        confirmacion.descartar(
+            usuario_id
+        )  # no dejar una propuesta que el usuario nunca vio
         return RespuestaAgente(
             texto="Tuve un problema para responder. Intenta de nuevo en un momento."
         )
+    # kickoff() sin stream devuelve CrewOutput; el isinstance acota el tipo (también puede ser streaming)
+    texto_respuesta = resultado.raw if isinstance(resultado, CrewOutput) else str(resultado)
     return RespuestaAgente(
-        texto=resultado.raw,
+        texto=texto_respuesta,
         confirmacion_pendiente=confirmacion.pendiente_id(usuario_id),
     )
 
