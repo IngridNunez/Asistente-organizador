@@ -79,9 +79,9 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
             "Falta crewai: activa .venv con Python 3.12 y corre pip install -r requirements.txt"
         ) from e
 
-    # Las comillas triples delimitan el mensaje en el prompt: se neutralizan dentro del texto.
-    # Es solo higiene; la defensa real contra inyección es que ninguna tool modifica datos sin sí del usuario.
-    texto = texto[:MAX_CHARS_TEXTO].replace('"""', "'''")
+    # Solo se acota el largo. La defensa contra inyección es que ninguna tool modifica datos
+    # sin el sí del usuario; un delimitador en el prompt no es una frontera de seguridad.
+    texto = texto[:MAX_CHARS_TEXTO]
 
     ahora = datetime.now(ZoneInfo(ZONA_HORARIA))
     agente = Agent(
