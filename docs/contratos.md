@@ -45,6 +45,13 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
 
 Archivo: `src/agente/`
 
+Internamente `responder()` usa CrewAI (Agent, Task, Crew) con Groq como LLM, y
+expone las herramientas de calendario con `@tool` de `crewai.tools` en
+`src/agente/tools.py`. La firma de `responder()` no cambia por esto. Hoy
+`confirmacion_pendiente` y `accion_local` salen siempre en `None`: el modelo
+pide confirmación hablada y, sin memoria de conversación, no puede completar
+la creación de un evento hasta que se implemente.
+
 El agente nunca ejecuta directamente una acción sobre el PC: solo la propone en
 `accion_local`. Quien la ejecuta de verdad es la capa de herramientas/cliente,
 que aplica la allowlist (ver `docs/seguridad.md`).

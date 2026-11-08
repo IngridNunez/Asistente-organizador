@@ -49,12 +49,14 @@ a la otra.
 
 **Persona A — Prompt y conexión LLM**
 
-- [ ] Armar el prompt base del asistente (tono, qué puede y no puede hacer).
-- [ ] Implementar la conexión LangChain + Groq (`openai/gpt-oss-120b`) y el
-      esqueleto de `responder(texto, usuario_id) -> RespuestaAgente` en
+- [x] Armar el prompt base del asistente (tono, qué puede y no puede hacer)
+      en `src/agente/prompt.py`.
+- [x] Implementar la conexión con Groq (`openai/gpt-oss-120b`) y
+      `responder(texto, usuario_id) -> RespuestaAgente` en
       `src/agente/agente.py` (ver `docs/contratos.md`), llamando a
-      `crear_evento_calendario_falso` / `listar_eventos` mientras
-      Herramientas no tenga lista la versión real.
+      `crear_evento_calendario` / `listar_eventos` (versión "falso") mientras
+      Herramientas no tenga lista la versión real. El ciclo del agente corre
+      con CrewAI, no con LangChain.
 
 **Persona B — Memoria**
 
