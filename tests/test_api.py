@@ -35,7 +35,9 @@ def test_sin_token_configurado_falla_cerrado(monkeypatch):
 
 
 def test_token_incorrecto_o_ausente():
-    mal = client.post("/conversar", json=CUERPO, headers={"Authorization": "Bearer otro"})
+    mal = client.post(
+        "/conversar", json=CUERPO, headers={"Authorization": "Bearer otro"}
+    )
     assert mal.status_code == 401
     sin = client.post("/conversar", json=CUERPO)
     assert sin.status_code == 401

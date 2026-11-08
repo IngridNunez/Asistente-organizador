@@ -12,11 +12,35 @@ TTL_SEGUNDOS = 300
 # Palabras que cuentan como "sí". Si el mensaje trae cualquier otra, NO se ejecuta:
 # "sí, pero a las 6" debe tratarse como un pedido nuevo, no como confirmación.
 PALABRAS_SI = {
-    "si", "sí", "confirmo", "confirmado", "dale", "ok", "okay", "claro", "correcto",
-    "perfecto", "adelante", "hazlo", "crealo", "créalo", "confirmalo", "confírmalo",
-    "por", "favor", "gracias",
+    "si",
+    "sí",
+    "confirmo",
+    "confirmado",
+    "dale",
+    "ok",
+    "okay",
+    "claro",
+    "correcto",
+    "perfecto",
+    "adelante",
+    "hazlo",
+    "crealo",
+    "créalo",
+    "confirmalo",
+    "confírmalo",
+    "por",
+    "favor",
+    "gracias",
 }
-PALABRAS_NO = {"no", "cancela", "cancelar", "cancelalo", "cancélalo", "olvidalo", "olvídalo"}
+PALABRAS_NO = {
+    "no",
+    "cancela",
+    "cancelar",
+    "cancelalo",
+    "cancélalo",
+    "olvidalo",
+    "olvídalo",
+}
 
 
 @dataclass
@@ -39,7 +63,9 @@ def _palabras(texto: str) -> list[str]:
 
 # La herramienta del agente llama aquí: NO crea nada, solo deja la propuesta esperando el "sí".
 def proponer(usuario_id: str, titulo: str, inicio: str, fin: str) -> str:
-    accion = AccionPendiente(uuid.uuid4().hex[:8], titulo, inicio, fin, time.monotonic())
+    accion = AccionPendiente(
+        uuid.uuid4().hex[:8], titulo, inicio, fin, time.monotonic()
+    )
     _PENDIENTES[usuario_id] = accion
     return accion.id
 
@@ -68,5 +94,7 @@ def resolver(usuario_id: str, texto: str) -> str | None:
     if palabras[0] in PALABRAS_NO:
         return "Listo, no lo creé."
     if len(palabras) <= 5 and all(p in PALABRAS_SI for p in palabras):
-        return calendario.crear_evento_calendario(accion.titulo, accion.inicio, accion.fin)
+        return calendario.crear_evento_calendario(
+            accion.titulo, accion.inicio, accion.fin
+        )
     return None

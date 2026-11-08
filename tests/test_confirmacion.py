@@ -18,7 +18,9 @@ def limpio(monkeypatch):
 
 
 def proponer(usuario="u1"):
-    return confirmacion.proponer(usuario, "Reunión", "2026-11-10T17:00:00", "2026-11-10T18:00:00")
+    return confirmacion.proponer(
+        usuario, "Reunión", "2026-11-10T17:00:00", "2026-11-10T18:00:00"
+    )
 
 
 def test_proponer_no_crea_nada(limpio):
@@ -27,7 +29,9 @@ def test_proponer_no_crea_nada(limpio):
     assert limpio == []
 
 
-@pytest.mark.parametrize("texto", ["sí", "Sí, créalo", "confirmo", "dale por favor", "OK."])
+@pytest.mark.parametrize(
+    "texto", ["sí", "Sí, créalo", "confirmo", "dale por favor", "OK."]
+)
 def test_si_explicito_crea_el_evento(limpio, texto):
     proponer()
     assert confirmacion.resolver("u1", texto) == "creado"
@@ -78,7 +82,9 @@ def test_pendiente_de_otro_usuario_no_se_confirma(limpio):
 def test_pendiente_caducada_no_se_ejecuta(limpio, monkeypatch):
     proponer()
     ahora = confirmacion.time.monotonic()
-    monkeypatch.setattr(confirmacion.time, "monotonic", lambda: ahora + confirmacion.TTL_SEGUNDOS + 1)
+    monkeypatch.setattr(
+        confirmacion.time, "monotonic", lambda: ahora + confirmacion.TTL_SEGUNDOS + 1
+    )
     assert confirmacion.resolver("u1", "sí") is None
     assert limpio == []
 
