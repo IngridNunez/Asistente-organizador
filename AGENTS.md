@@ -48,7 +48,7 @@ Python 3.12 es obligatorio: `crewai` no instala en 3.14 o superior. Abre cada te
 
 ## 5. Variables de entorno
 
-`GROQ_API_KEY`, `GROQ_BASE_URL`, `GROQ_MODEL`, `GROQ_STT_MODEL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `API_HOST`, `API_PORT`, `API_AUTH_TOKEN`.
+`GROQ_API_KEY`, `GROQ_BASE_URL`, `GROQ_MODEL`, `GROQ_STT_MODEL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `API_HOST`, `API_PORT`, `API_AUTH_TOKEN` (obligatorio, sin él la API responde 503), `API_AUTH_DISABLED` (solo desarrollo local).
 
 Cada integrante usa su propia `GROQ_API_KEY` en su `.env` local.
 
