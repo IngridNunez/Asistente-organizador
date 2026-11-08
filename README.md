@@ -11,7 +11,7 @@ Un agente corre como API (FastAPI) en un servidor, y cada dispositivo
 API y reproduce la respuesta. El cliente local es el único que puede
 ejecutar acciones sobre ese dispositivo (ver `docs/seguridad.md`).
 
-```
+```text
 cliente (PC/celular) --audio--> API (FastAPI) --LLM + herramientas--> respuesta
         ^                                                                |
         |-------------------------- audio de respuesta -------------------|
@@ -19,7 +19,7 @@ cliente (PC/celular) --audio--> API (FastAPI) --LLM + herramientas--> respuesta
 
 ## Estructura del repo
 
-```
+```text
 agente-voz/
 ├── README.md
 ├── .env.example
