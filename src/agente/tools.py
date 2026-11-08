@@ -4,9 +4,8 @@ from crewai.tools import tool
 
 from src.agente import confirmacion
 
-# Hoy se importan las versiones "_falso": cuando Herramientas termine las reales
-# (src/herramientas/calendario.py), solo cambia este import.
-from src.herramientas import calendario_falso as calendario
+# Mismo calendario que usa confirmacion.py: así cambiar de falso a real se hace en un solo lugar.
+calendario = confirmacion.calendario
 
 
 # Tools que ve el agente, ligadas a un usuario. Ninguna modifica datos: crear un evento
@@ -17,7 +16,10 @@ def construir_tools(usuario_id: str) -> list:
         """Propone un evento para el calendario del usuario. NO lo crea: el sistema le pide
         confirmación al usuario y solo lo crea si responde que sí. `inicio` y `fin` van en
         formato ISO 8601, por ejemplo 2026-11-09T17:00:00."""
-        confirmacion.proponer(usuario_id, titulo, inicio, fin)
+        try:
+            confirmacion.proponer(usuario_id, titulo, inicio, fin)
+        except ValueError as e:
+            return f"Error: {e}. Corrige las fechas y vuelve a intentarlo, o pregúntale al usuario."
         return "Propuesta registrada. Dile al usuario que confirme con un sí o un no."
 
     @tool("listar_eventos")

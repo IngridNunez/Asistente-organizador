@@ -1,17 +1,23 @@
+import logging
 import re
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
-# Hoy se importa la versión "_falso": cuando Herramientas termine la real, solo cambia este import.
+# Único punto donde el agente toca el calendario (tools.py lo reutiliza desde aquí).
+# Hoy es la versión "_falso": cuando Herramientas termine la real, solo cambia este import.
 from src.herramientas import calendario_falso as calendario
+
+log = logging.getLogger(__name__)
 
 # Una acción propuesta caduca a los 5 minutos: una confirmación vieja no debe ejecutar nada.
 TTL_SEGUNDOS = 300
 
-# Palabras que cuentan como "sí". Si el mensaje trae cualquier otra, NO se ejecuta:
-# "sí, pero a las 6" debe tratarse como un pedido nuevo, no como confirmación.
-PALABRAS_SI = {
+# Palabras que cuentan como "sí". El mensaje debe traer al menos una de NUCLEO_SI y
+# ninguna palabra fuera de las dos listas: "gracias" solo no confirma, y
+# "sí, pero a las 6" se trata como un pedido nuevo, no como confirmación.
+NUCLEO_SI = {
     "si",
     "sí",
     "confirmo",
@@ -28,10 +34,8 @@ PALABRAS_SI = {
     "créalo",
     "confirmalo",
     "confírmalo",
-    "por",
-    "favor",
-    "gracias",
 }
+RELLENO = {"por", "favor", "gracias"}
 PALABRAS_NO = {
     "no",
     "cancela",
@@ -41,6 +45,9 @@ PALABRAS_NO = {
     "olvidalo",
     "olvídalo",
 }
+# Un "no" largo ("no, mejor a las 6") es una corrección, no una cancelación: va al modelo.
+MAX_PALABRAS_NO = 3
+MAX_PALABRAS_SI = 5
 
 
 @dataclass
@@ -61,8 +68,32 @@ def _palabras(texto: str) -> list[str]:
     return re.findall(r"\w+", texto.lower())
 
 
+# Borra las propuestas vencidas de todos los usuarios, para que el dict no crezca sin límite.
+def _purgar_vencidas() -> None:
+    ahora = time.monotonic()
+    for usuario, accion in list(_PENDIENTES.items()):
+        if ahora - accion.creada > TTL_SEGUNDOS:
+            _PENDIENTES.pop(usuario, None)
+
+
+# Falla con ValueError si las fechas no sirven, para que el error llegue al modelo ahora
+# y no recién cuando el usuario ya confirmó.
+def _validar_fechas(inicio: str, fin: str) -> None:
+    try:
+        desde = datetime.fromisoformat(inicio)
+        hasta = datetime.fromisoformat(fin)
+    except ValueError:
+        raise ValueError("inicio y fin deben ir en formato ISO 8601") from None
+    if (desde.tzinfo is None) != (hasta.tzinfo is None):
+        raise ValueError("inicio y fin deben usar la misma zona horaria")
+    if hasta <= desde:
+        raise ValueError("fin debe ser posterior a inicio")
+
+
 # La herramienta del agente llama aquí: NO crea nada, solo deja la propuesta esperando el "sí".
 def proponer(usuario_id: str, titulo: str, inicio: str, fin: str) -> str:
+    _validar_fechas(inicio, fin)
+    _purgar_vencidas()
     accion = AccionPendiente(
         uuid.uuid4().hex[:8], titulo, inicio, fin, time.monotonic()
     )
@@ -91,10 +122,19 @@ def resolver(usuario_id: str, texto: str) -> str | None:
     palabras = _palabras(texto)
     if not palabras:
         return None
-    if palabras[0] in PALABRAS_NO:
+    if palabras[0] in PALABRAS_NO and len(palabras) <= MAX_PALABRAS_NO:
         return "Listo, no lo creé."
-    if len(palabras) <= 5 and all(p in PALABRAS_SI for p in palabras):
-        return calendario.crear_evento_calendario(
-            accion.titulo, accion.inicio, accion.fin
-        )
+    if (
+        len(palabras) <= MAX_PALABRAS_SI
+        and any(p in NUCLEO_SI for p in palabras)
+        and all(p in NUCLEO_SI or p in RELLENO for p in palabras)
+    ):
+        try:
+            return calendario.crear_evento_calendario(
+                accion.titulo, accion.inicio, accion.fin
+            )
+        except Exception as e:
+            # El calendario real puede fallar (red, permisos): se avisa, no se tumba la petición.
+            log.error("Falló la creación del evento: %s", e)
+            return "No pude crear el evento. Intenta de nuevo en un momento."
     return None

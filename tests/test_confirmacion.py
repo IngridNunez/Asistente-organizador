@@ -94,3 +94,54 @@ def test_descartar(limpio):
     confirmacion.descartar("u1")
     assert confirmacion.pendiente_id("u1") is None
     assert confirmacion.resolver("u1", "sí") is None
+
+
+@pytest.mark.parametrize("texto", ["gracias", "por favor", "por favor gracias"])
+def test_agradecer_no_confirma(limpio, texto):
+    proponer()
+    assert confirmacion.resolver("u1", texto) is None
+    assert limpio == []
+
+
+def test_no_largo_es_una_correccion_no_una_cancelacion(limpio):
+    proponer()
+    assert confirmacion.resolver("u1", "no, mejor a las 6") is None
+    assert limpio == []
+
+
+@pytest.mark.parametrize(
+    "inicio, fin",
+    [
+        ("mañana", "2026-11-10T18:00:00"),
+        ("2026-11-10T17:00:00", "2026-11-10T16:00:00"),
+        ("2026-11-10T17:00:00", "2026-11-10T17:00:00"),
+        ("2026-11-10T17:00:00", "2026-11-10T18:00:00Z"),
+    ],
+)
+def test_fechas_invalidas_no_dejan_propuesta(inicio, fin):
+    with pytest.raises(ValueError):
+        confirmacion.proponer("u1", "Reunión", inicio, fin)
+    assert confirmacion.pendiente_id("u1") is None
+
+
+def test_proponer_purga_las_vencidas(limpio, monkeypatch):
+    proponer("u1")
+    ahora = confirmacion.time.monotonic()
+    monkeypatch.setattr(
+        confirmacion.time, "monotonic", lambda: ahora + confirmacion.TTL_SEGUNDOS + 1
+    )
+    proponer("u2")
+    assert confirmacion.pendiente_id("u1") is None
+    assert confirmacion.pendiente_id("u2") is not None
+
+
+def test_fallo_del_calendario_se_avisa_sin_romper(limpio, monkeypatch):
+    def falla(*args):
+        raise ConnectionError("sin red")
+
+    monkeypatch.setattr(confirmacion.calendario, "crear_evento_calendario", falla)
+    proponer()
+    assert (
+        confirmacion.resolver("u1", "sí")
+        == "No pude crear el evento. Intenta de nuevo en un momento."
+    )
