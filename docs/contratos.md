@@ -47,10 +47,14 @@ Archivo: `src/agente/`
 
 Internamente `responder()` usa CrewAI (Agent, Task, Crew) con Groq como LLM, y
 expone las herramientas de calendario con `@tool` de `crewai.tools` en
-`src/agente/tools.py`. La firma de `responder()` no cambia por esto. Hoy
-`confirmacion_pendiente` y `accion_local` salen siempre en `None`: el modelo
-pide confirmación hablada y, sin memoria de conversación, no puede completar
-la creación de un evento hasta que se implemente.
+`src/agente/tools.py`. La firma de `responder()` no cambia por esto.
+
+Crear un evento requiere confirmación y la impone el código, no el modelo: la
+tool `proponer_evento_calendario` no crea nada, solo deja la propuesta en
+`src/agente/confirmacion.py` y `responder()` devuelve su id en
+`confirmacion_pendiente`. En el turno siguiente, un "sí" explícito del usuario
+ejecuta el evento; un "no", cualquier otro mensaje o 5 minutos de espera lo
+descartan. `accion_local` sale siempre en `None` por ahora.
 
 El agente nunca ejecuta directamente una acción sobre el PC: solo la propone en
 `accion_local`. Quien la ejecuta de verdad es la capa de herramientas/cliente,
