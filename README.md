@@ -11,7 +11,7 @@ Un agente corre como API (FastAPI) en un servidor, y cada dispositivo
 API y reproduce la respuesta. El cliente local es el único que puede
 ejecutar acciones sobre ese dispositivo (ver `docs/seguridad.md`).
 
-```
+```text
 cliente (PC/celular) --audio--> API (FastAPI) --LLM + herramientas--> respuesta
         ^                                                                |
         |-------------------------- audio de respuesta -------------------|
@@ -19,7 +19,7 @@ cliente (PC/celular) --audio--> API (FastAPI) --LLM + herramientas--> respuesta
 
 ## Estructura del repo
 
-```
+```text
 agente-voz/
 ├── README.md
 ├── .env.example
@@ -27,7 +27,7 @@ agente-voz/
 ├── requirements.txt
 ├── src/
 │   ├── voz/            # STT y TTS
-│   ├── agente/          # prompt, memoria, LangChain
+│   ├── agente/          # prompt, memoria, CrewAI
 │   ├── herramientas/    # Google Calendar, acceso al PC
 │   ├── api/             # FastAPI, endpoint /conversar
 │   └── interfaz/        # botón y pantalla (web/Telegram)
@@ -40,19 +40,26 @@ agente-voz/
 
 ## Cómo empezar
 
+Requiere Python 3.12 (`crewai` no instala en 3.14 o superior).
+
 ```bash
-python -m venv .venv
+uv venv --python 3.12 .venv   # sin uv: py -3.12 -m venv .venv
 .venv\Scripts\activate
+python --version              # debe decir 3.12.x
 pip install -r requirements.txt
 cp .env.example .env   # completar con las claves reales
 ```
 
+Abre cada terminal nueva con el venv activo; sin él se usa el Python global y fallan `pytest` y `uvicorn`.
+
 Levantar la API:
+
 ```bash
 uvicorn src.api.main:app --reload
 ```
 
 Correr los tests:
+
 ```bash
 pytest
 ```
