@@ -68,17 +68,22 @@ def _palabras(texto: str) -> list[str]:
     return re.findall(r"\w+", texto.lower())
 
 
-# Borra las propuestas vencidas de todos los usuarios, para que el dict no crezca sin límite.
 def _purgar_vencidas() -> None:
+    """Borra las propuestas vencidas de todos los usuarios, para que el dict no crezca sin límite."""
     ahora = time.monotonic()
     for usuario, accion in list(_PENDIENTES.items()):
         if ahora - accion.creada > TTL_SEGUNDOS:
             _PENDIENTES.pop(usuario, None)
 
 
-# Falla con ValueError si las fechas no sirven, para que el error llegue al modelo ahora
-# y no recién cuando el usuario ya confirmó.
 def _validar_fechas(inicio: str, fin: str) -> None:
+    """Valida las fechas de una propuesta.
+
+    Falla ahora para que el error llegue al modelo y no recién cuando el usuario ya confirmó.
+
+    Raises:
+        ValueError: si no son ISO 8601, mezclan zonas horarias o `fin` no es posterior a `inicio`.
+    """
     try:
         desde = datetime.fromisoformat(inicio)
         hasta = datetime.fromisoformat(fin)
@@ -90,8 +95,18 @@ def _validar_fechas(inicio: str, fin: str) -> None:
         raise ValueError("fin debe ser posterior a inicio")
 
 
-# La herramienta del agente llama aquí: NO crea nada, solo deja la propuesta esperando el "sí".
 def proponer(usuario_id: str, titulo: str, inicio: str, fin: str) -> str:
+    """Registra una propuesta de evento. La tool del agente llama aquí.
+
+    NO crea nada: solo deja la propuesta esperando el "sí". Reemplaza la pendiente anterior
+    del mismo usuario.
+
+    Returns:
+        El id de la acción pendiente.
+
+    Raises:
+        ValueError: si las fechas no son válidas (ver `_validar_fechas`).
+    """
     _validar_fechas(inicio, fin)
     _purgar_vencidas()
     accion = AccionPendiente(
@@ -102,17 +117,25 @@ def proponer(usuario_id: str, titulo: str, inicio: str, fin: str) -> str:
 
 
 def descartar(usuario_id: str) -> None:
+    """Elimina la acción pendiente del usuario, si existe."""
     _PENDIENTES.pop(usuario_id, None)
 
 
 def pendiente_id(usuario_id: str) -> str | None:
+    """Devuelve el id de la acción pendiente del usuario, o None si no hay."""
     accion = _PENDIENTES.get(usuario_id)
     return accion.id if accion else None
 
 
-# Se llama al inicio de cada turno. Siempre consume la acción pendiente (vale una sola vez).
-# Devuelve el texto a decir si el mensaje era un sí/no explícito; None si hay que seguir normal.
 def resolver(usuario_id: str, texto: str) -> str | None:
+    """Resuelve la confirmación pendiente del usuario. Se llama al inicio de cada turno.
+
+    Siempre consume la acción pendiente (vale una sola vez). Un "sí" explícito crea el evento;
+    un "no" corto lo cancela. Si la propuesta venció o el mensaje es otra cosa, devuelve None.
+
+    Returns:
+        El texto a decir si el mensaje era un sí/no explícito; None si hay que seguir normal.
+    """
     accion = _PENDIENTES.pop(usuario_id, None)
     if accion is None:
         return None

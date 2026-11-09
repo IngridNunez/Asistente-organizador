@@ -8,9 +8,19 @@ from src.agente import confirmacion
 calendario = confirmacion.calendario
 
 
-# Tools que ve el agente, ligadas a un usuario. Ninguna modifica datos: crear un evento
-# solo queda propuesto y se ejecuta en confirmacion.resolver() cuando el usuario dice que sí.
 def construir_tools(usuario_id: str) -> list:
+    """Construye las tools que ve el agente, ligadas a un usuario.
+
+    Ninguna modifica datos: crear un evento solo queda propuesto y se ejecuta en
+    `confirmacion.resolver()` cuando el usuario dice que sí.
+
+    Args:
+        usuario_id: usuario al que se asocian las propuestas de evento.
+
+    Returns:
+        Lista con `proponer_evento_calendario` y `listar_eventos`.
+    """
+
     @tool("proponer_evento_calendario")
     def proponer_evento_calendario(titulo: str, inicio: str, fin: str) -> str:
         """Propone un evento para el calendario del usuario. NO lo crea: el sistema le pide

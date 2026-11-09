@@ -39,8 +39,12 @@ class RespuestaAgente(BaseModel):
     )
 
 
-# Crea el LLM de Groq (API compatible con OpenAI). Falla claro si falta configuración.
 def _crear_llm() -> "LLM":
+    """Crea el LLM de Groq (API compatible con OpenAI).
+
+    Raises:
+        RuntimeError: si faltan `GROQ_API_KEY` o `GROQ_BASE_URL` en el entorno (.env).
+    """
     from crewai import LLM
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -57,9 +61,25 @@ def _crear_llm() -> "LLM":
     )
 
 
-# Razonamiento real con CrewAI + Groq. usuario_id identifica la acción pendiente de confirmar
-# (y quedará para la memoria de Persona B).
 def responder(texto: str, usuario_id: str) -> RespuestaAgente:
+    """Responde al usuario con razonamiento real (CrewAI + Groq).
+
+    Si había un evento esperando confirmación, un sí/no explícito lo resuelve el código
+    (`confirmacion.resolver`) sin llamar al modelo.
+
+    Args:
+        texto: lo que dijo el usuario, ya transcrito. Se recorta a `MAX_CHARS_TEXTO`.
+        usuario_id: identifica la acción pendiente de confirmar (y quedará para la
+            memoria de Persona B).
+
+    Returns:
+        `RespuestaAgente` con el texto a decir y, si corresponde, el id de la confirmación
+        pendiente.
+
+    Raises:
+        RuntimeError: si falta `crewai` o la configuración de Groq. Los fallos de la
+            llamada al modelo no se propagan: devuelven un mensaje de error hablado.
+    """
     texto = texto.strip()
     if not texto:
         return RespuestaAgente(texto="No te escuché bien. ¿Me lo repites?")
@@ -118,6 +138,6 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     )
 
 
-# Stub: hace eco del texto recibido, sin LLM ni memoria real
 def responder_falso(texto: str, usuario_id: str) -> RespuestaAgente:
+    """Stub: hace eco del texto recibido, sin LLM ni memoria real."""
     return RespuestaAgente(texto=f"Recibí: {texto}")

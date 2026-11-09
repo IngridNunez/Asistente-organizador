@@ -4,8 +4,16 @@ ZONA_HORARIA = "America/Santiago"
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 
 
-# Prompt de sistema del asistente. Recibe la fecha para resolver "mañana", "el viernes", etc.
 def construir_prompt_sistema(ahora: datetime) -> str:
+    """Arma el prompt de sistema del asistente (tono, qué puede y no puede hacer, seguridad).
+
+    Args:
+        ahora: fecha y hora actuales en `ZONA_HORARIA`; se incluyen en el prompt para que el
+            modelo resuelva "mañana", "el viernes", etc.
+
+    Returns:
+        El texto del prompt, listo para usar como `backstory` del agente.
+    """
     fecha = f"{DIAS[ahora.weekday()]} {ahora:%Y-%m-%d %H:%M}"
     return f"""Eres un asistente personal de voz. Ayudas a organizar el tiempo del usuario.
 
