@@ -21,6 +21,12 @@ load_dotenv()
 
 MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
 MAX_CHARS_TEXTO = 2000  # tope de lo que se manda al LLM por turno (costo y abuso)
+TIMEOUT_LLM_SEGUNDOS = (
+    30  # si Groq no responde en este tiempo, el turno falla con mensaje
+)
+MAX_PASOS_AGENTE = (
+    5  # tope de vueltas modelo-tool por turno (CrewAI usa 25 por defecto)
+)
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +64,7 @@ def _crear_llm() -> "LLM":
         base_url=base_url,
         api_key=api_key,
         custom_openai=True,
+        timeout=TIMEOUT_LLM_SEGUNDOS,
     )
 
 
@@ -110,6 +117,7 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
         backstory=construir_prompt_sistema(ahora),
         tools=construir_tools(usuario_id),
         llm=_crear_llm(),
+        max_iter=MAX_PASOS_AGENTE,
         verbose=False,
     )
     tarea = Task(
@@ -131,7 +139,9 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
             texto="Tuve un problema para responder. Intenta de nuevo en un momento."
         )
     # kickoff() sin stream devuelve CrewOutput; el isinstance acota el tipo (también puede ser streaming)
-    texto_respuesta = resultado.raw if isinstance(resultado, CrewOutput) else str(resultado)
+    texto_respuesta = (
+        resultado.raw if isinstance(resultado, CrewOutput) else str(resultado)
+    )
     return RespuestaAgente(
         texto=texto_respuesta,
         confirmacion_pendiente=confirmacion.pendiente_id(usuario_id),
