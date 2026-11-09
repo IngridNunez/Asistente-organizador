@@ -7,6 +7,10 @@ langchain==1.4.9
 langchain-openai==1.7.4
 python-dotenv==1.2.4
 
+# Calendario: Google Calendar (OAuth y cliente de la API)
+google-api-python-client==2.201.0
+google-auth-oauthlib==1.5.0
+
 # STT: Whisper vía Groq (decidido)
 groq==1.7.0
 
@@ -23,4 +27,3 @@ httpx==0.28.1
 # Interfaz: python-telegram-bot (opción Telegram)
 # TTS: edge-tts
 # TTS: piper-tts
-# Calendario: google-api-python-client google-auth-oauthlib
