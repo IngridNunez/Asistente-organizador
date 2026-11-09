@@ -1,5 +1,7 @@
 # Avances de Ingrid (Herramientas A: calendario)
 
+**Versión 1.0** · 2026-11-08
+
 ## 2026-11-08
 
 - **Qué hice (paso a paso):**
