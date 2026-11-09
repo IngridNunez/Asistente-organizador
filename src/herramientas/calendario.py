@@ -22,10 +22,14 @@ SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 ZONA_HORARIA = "America/Santiago"
 
 # El token es personal de cada usuario y vive fuera del repo (nunca se sube a git).
-RUTA_TOKEN = Path(os.getenv("GOOGLE_TOKEN_PATH") or Path.home() / ".sara" / "token.json")
+RUTA_TOKEN = Path(
+    os.getenv("GOOGLE_TOKEN_PATH") or Path.home() / ".sara" / "token.json"
+)
 
 MAX_EVENTOS = 50  # tope de eventos que se le devuelven al agente por consulta
-MAX_CHARS_TITULO = 200  # el título viene del LLM: se acota para no escribir basura en el calendario
+MAX_CHARS_TITULO = (
+    200  # el título viene del LLM: se acota para no escribir basura en el calendario
+)
 
 
 # Devuelve credenciales válidas. La primera vez abre el navegador para que el usuario autorice;
@@ -57,7 +61,7 @@ def _credenciales() -> Credentials:
         }
         flow = InstalledAppFlow.from_client_config(config, SCOPES)
         # Con una app de escritorio siempre devuelve Credentials; cast() solo acota el tipo.
-        creds = cast(Credentials, flow.run_local_server(port=0))
+        creds = cast("Credentials", flow.run_local_server(port=0))
 
     RUTA_TOKEN.parent.mkdir(parents=True, exist_ok=True)
     RUTA_TOKEN.write_text(creds.to_json())
@@ -74,7 +78,9 @@ def _parsear(valor: str) -> datetime:
     try:
         fecha = datetime.fromisoformat(valor)
     except ValueError:
-        raise ValueError(f"fecha inválida, debe ir en formato ISO 8601: {valor!r}") from None
+        raise ValueError(
+            f"fecha inválida, debe ir en formato ISO 8601: {valor!r}"
+        ) from None
     if fecha.tzinfo is None:
         fecha = fecha.replace(tzinfo=ZoneInfo(ZONA_HORARIA))
     return fecha
@@ -124,7 +130,9 @@ def crear_evento_calendario(titulo: str, inicio: str, fin: str) -> str:
     if not titulo:
         raise ValueError("el título no puede estar vacío")
     if len(titulo) > MAX_CHARS_TITULO:
-        raise ValueError(f"el título es demasiado largo (máximo {MAX_CHARS_TITULO} caracteres)")
+        raise ValueError(
+            f"el título es demasiado largo (máximo {MAX_CHARS_TITULO} caracteres)"
+        )
 
     desde = _parsear(inicio)
     hasta = _parsear(fin)
