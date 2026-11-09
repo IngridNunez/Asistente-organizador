@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 # Único punto donde el agente toca el calendario (tools.py lo reutiliza desde aquí).
-# Hoy es la versión "_falso": cuando Herramientas termine la real, solo cambia este import.
-from src.herramientas import calendario_falso as calendario
+# Usa el calendario real (Google Calendar). Para volver al stub: calendario_falso as calendario.
+from src.herramientas import calendario
 
 log = logging.getLogger(__name__)
 
