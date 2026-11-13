@@ -16,3 +16,6 @@ audios_tmp/
 credentials.json
 client_secret*.json
 token.json
+
+# Audios de prueba locales (incluyen voces personales)
+tests/audios/
