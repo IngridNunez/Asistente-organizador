@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 # Hoy se importan las versiones "_falso": cada grupo las reemplaza por las
 # reales a medida que termina, sin tocar este archivo más que el import.
-from src.agente.agente import responder_falso
-from src.voz.stt import transcribir_falso
+from src.agente.agente import responder
+from src.voz.stt import transcribir
 from src.voz.tts import hablar_falso
 
 app = FastAPI()
@@ -62,8 +62,8 @@ def conversar(req: ConversarRequest):
         raise HTTPException(status_code=400, detail="audio_base64 inválido")
 
     # Pipeline: voz -> texto -> respuesta del agente -> voz
-    texto = transcribir_falso(audio)
-    texto_respuesta = responder_falso(texto, req.usuario_id).texto
+    texto = transcribir(audio)
+    texto_respuesta = responder(texto, req.usuario_id).texto
     audio_respuesta = hablar_falso(texto_respuesta)
 
     return ConversarResponse(
