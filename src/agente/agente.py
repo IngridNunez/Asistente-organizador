@@ -1,5 +1,7 @@
 import logging
 import os
+import re
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -21,6 +23,12 @@ load_dotenv()
 
 MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
 MAX_CHARS_TEXTO = 2000  # tope de lo que se manda al LLM por turno (costo y abuso)
+MENSAJE_TEXTO_LARGO = "Tu mensaje es muy largo para procesarlo. Resúmelo y vuelve a decirlo."
+# Groq cuenta max_tokens contra el límite por minuto: una respuesta corta evita 429 innecesarios.
+# Va alto porque el modelo gpt-oss gasta tokens en razonamiento antes de responder.
+MAX_TOKENS_RESPUESTA = 1500
+REINTENTOS_RATE_LIMIT = 2  # reintentos ante 429 (límite de tokens por minuto de Groq)
+ESPERA_RATE_LIMIT_SEGUNDOS = 4  # espera base; se duplica en cada reintento
 TIMEOUT_LLM_SEGUNDOS = (
     30  # si Groq no responde en este tiempo, el turno falla con mensaje
 )
@@ -29,6 +37,20 @@ MAX_PASOS_AGENTE = (
 )
 
 log = logging.getLogger(__name__)
+
+# El modelo a veces pide confirmar sin haber llamado a proponer_evento_calendario: no hay nada que confirmar.
+PATRON_CONFIRMACION_SIN_PROPUESTA = re.compile(
+    r"¿\s*(lo|la)\s+confirmo\b|puedo registrar", re.IGNORECASE
+)
+MENSAJE_SIN_PROPUESTA = (
+    "No pude preparar ese evento. Dime el título, el día, la hora de inicio y la duración."
+)
+# Dentro de un turno del modelo nunca se crea nada (solo `confirmacion.resolver` crea, antes del modelo).
+# Por eso cualquier afirmación de creación en esta respuesta es falsa y no se dice.
+PATRON_EXITO_SIN_RESULTADO = re.compile(
+    r"quedó registrad|quedo registrad|\bcreé (el|la|tu|un|una)\b|\bcreado\b", re.IGNORECASE
+)
+MENSAJE_SIN_EXITO = "Todavía no he creado nada. Dime si quieres que lo proponga."
 
 # CrewAI loguea cada reintento y avisos de conteo de tokens: solo nos sirve nuestro propio log.
 logging.getLogger("crewai").setLevel(logging.CRITICAL)
@@ -65,6 +87,9 @@ def _crear_llm() -> "LLM":
         api_key=api_key,
         custom_openai=True,
         timeout=TIMEOUT_LLM_SEGUNDOS,
+        max_tokens=MAX_TOKENS_RESPUESTA,
+        # Sin reintentos del SDK: el bucle de `responder` decide. Medido: 45 -> 9 solicitudes con 429 persistente.
+        max_retries=0,
     )
 
 
@@ -87,37 +112,46 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
         RuntimeError: si falta `crewai` o la configuración de Groq. Los fallos de la
             llamada al modelo no se propagan: devuelven un mensaje de error hablado.
     """
+    inicio = time.monotonic()
     texto = texto.strip()
+    if len(texto) > MAX_CHARS_TEXTO:
+        # No se recorta: un corte silencioso perdería la parte final (la pregunta, a menudo).
+        return RespuestaAgente(texto=MENSAJE_TEXTO_LARGO)
     if not texto:
         return RespuestaAgente(texto="No te escuché bien. ¿Me lo repites?")
 
     # Si había un evento esperando confirmación, la respuesta sí/no la decide el código, no el modelo.
-    respuesta_confirmacion = confirmacion.resolver(usuario_id, texto)
+    # `visto` es lo que el usuario debía responder al empezar el turno: si cambia durante la espera, no se ejecuta.
+    visto = confirmacion.pendiente_id(usuario_id)
+    respuesta_confirmacion = confirmacion.resolver(usuario_id, texto, visto)
     if respuesta_confirmacion is not None:
         return RespuestaAgente(texto=respuesta_confirmacion)
+    # Estado de partida: al terminar, `publicar` solo aplica las propuestas si nadie lo cambió.
+    base = confirmacion.capturar_estado(usuario_id)
 
     # crewai se importa aquí (pesado): la API con stubs y pytest no lo necesitan.
     try:
         from crewai import Agent, Crew, CrewOutput, Task
 
-        from src.agente.tools import construir_tools
+        from src.agente.tools import MetricasTurno, construir_tools
     except ImportError as e:
         raise RuntimeError(
             "Falta crewai: activa .venv con Python 3.12 y corre pip install -r requirements.txt"
         ) from e
 
-    # Solo se acota el largo. La defensa contra inyección es que ninguna tool modifica datos
-    # sin el sí del usuario; un delimitador en el prompt no es una frontera de seguridad.
-    texto = texto[:MAX_CHARS_TEXTO]
-
+    # La defensa contra inyección es que ninguna tool modifica datos sin el sí del usuario;
+    # un delimitador en el prompt no es una frontera de seguridad.
     ahora = datetime.now(ZoneInfo(ZONA_HORARIA))
+    metricas = MetricasTurno()  # un turno = un conjunto de herramientas: el presupuesto sobrevive a los reintentos
     agente = Agent(
         role="Asistente personal de voz",
         goal="Ayudar al usuario a organizar su tiempo y su calendario",
         backstory=construir_prompt_sistema(ahora),
-        tools=construir_tools(usuario_id),
+        tools=construir_tools(usuario_id, metricas),
         llm=_crear_llm(),
         max_iter=MAX_PASOS_AGENTE,
+        # Sin reintentos internos de CrewAI: un reintento por bucle de `responder`, no por capa.
+        max_retry_limit=0,
         verbose=False,
     )
     tarea = Task(
@@ -125,27 +159,87 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
         expected_output="Respuesta breve en español, en frases cortas, lista para leer en voz alta.",
         agent=agente,
     )
-    try:
-        resultado = Crew(
-            agents=[agente], tasks=[tarea], verbose=False, tracing=False
-        ).kickoff()
-    except Exception as e:
-        # Groq caído, rate limit, etc.: el cliente de voz recibe un mensaje, no una traza.
-        log.error("Falló la llamada al agente (Groq): %s", e)
-        confirmacion.descartar(
-            usuario_id
-        )  # no dejar una propuesta que el usuario nunca vio
-        return RespuestaAgente(
-            texto="Tuve un problema para responder. Intenta de nuevo en un momento."
-        )
+    resultado = None
+    for intento in range(REINTENTOS_RATE_LIMIT + 1):
+        metricas.crew_executions += 1
+        try:
+            resultado = Crew(
+                agents=[agente], tasks=[tarea], verbose=False, tracing=False
+            ).kickoff()
+            break
+        except Exception as e:
+            # Lo que propuso este intento no llegó al usuario: no se publica, ni en este turno ni en el reintento.
+            metricas.propuestas.clear()
+            # 429: el límite por minuto se libera solo; esperar y reintentar.
+            if _es_limite_de_uso(e) and intento < REINTENTOS_RATE_LIMIT:
+                metricas.retry_count += 1
+                time.sleep(ESPERA_RATE_LIMIT_SEGUNDOS * 2**intento)
+                continue
+            # Groq caído, rate limit agotado, etc.: el cliente de voz recibe un mensaje, no una traza.
+            log.error("Falló la llamada al agente (Groq): %s", confirmacion.tipo_de_error(e))
+            _registrar_metricas(metricas, inicio)
+            return RespuestaAgente(
+                texto="Tuve un problema para responder. Intenta de nuevo en un momento."
+            )
     # kickoff() sin stream devuelve CrewOutput; el isinstance acota el tipo (también puede ser streaming)
+    uso = resultado.token_usage if isinstance(resultado, CrewOutput) else None
+    _registrar_metricas(metricas, inicio, uso)
+    if not confirmacion.publicar(usuario_id, base, metricas.propuestas):
+        # Otro turno cambió la propuesta mientras éste trabajaba: no se aplica nada y se muestra la vigente.
+        vigente = confirmacion.resumen(usuario_id)
+        return RespuestaAgente(
+            texto=" ".join(p for p in (confirmacion.MENSAJE_CAMBIO, vigente) if p),
+            confirmacion_pendiente=confirmacion.pendiente_id(usuario_id),
+        )
     texto_respuesta = (
         resultado.raw if isinstance(resultado, CrewOutput) else str(resultado)
     )
+    confirmacion.cerrar_turno(usuario_id, visto)
+    pendiente = confirmacion.pendiente_id(usuario_id)
+    # Con propuesta pendiente, la pregunta de confirmación sale del código: lo que dijo el modelo
+    # podría no coincidir con lo que se guardó y lo que se ejecutará si el usuario dice que sí.
+    if pendiente is not None:
+        texto_respuesta = confirmacion.resumen(usuario_id) or texto_respuesta
+    elif PATRON_CONFIRMACION_SIN_PROPUESTA.search(texto_respuesta):
+        # Sin propuesta guardada, un "sí" después no crearía nada: no se deja decir que sí se confirma.
+        log.warning("El modelo pidió confirmación sin proponer evento")
+        texto_respuesta = MENSAJE_SIN_PROPUESTA
+    elif PATRON_EXITO_SIN_RESULTADO.search(texto_respuesta):
+        log.warning("El modelo afirmó una creación sin resultado de herramienta")
+        texto_respuesta = MENSAJE_SIN_EXITO
     return RespuestaAgente(
-        texto=texto_respuesta,
-        confirmacion_pendiente=confirmacion.pendiente_id(usuario_id),
+        texto=_para_voz(texto_respuesta), confirmacion_pendiente=pendiente
     )
+
+
+def _es_limite_de_uso(e: BaseException) -> bool:
+    """True si el proveedor respondió HTTP 429. Mira el código, no el texto: el mensaje puede traer cualquier número."""
+    return getattr(e, "status_code", None) == 429
+
+
+def _registrar_metricas(metricas, inicio: float, uso=None) -> None:
+    """Escribe los contadores del turno en el log. Sin texto del usuario ni del modelo.
+
+    `llm_requests` y los tokens vienen de CrewAI (`token_usage`); si falta, queda en None.
+    No se estiman tokens a partir de caracteres.
+    """
+    log.info(
+        "turno crew_executions=%d retry_count=%d tool_calls=%d llm_requests=%s "
+        "input_tokens=%s output_tokens=%s duration_ms=%d",
+        metricas.crew_executions,
+        metricas.retry_count,
+        metricas.tool_calls,
+        getattr(uso, "successful_requests", None),
+        getattr(uso, "prompt_tokens", None),
+        getattr(uso, "completion_tokens", None),
+        round((time.monotonic() - inicio) * 1000),
+    )
+
+
+def _para_voz(texto: str) -> str:
+    """Quita saltos de línea y escribe "a. m." / "p. m." como "a.m." / "p.m." para el TTS."""
+    texto = re.sub(r"\b([ap])\. ?m\.", r"\1.m.", texto)
+    return " ".join(texto.split())
 
 
 def responder_falso(texto: str, usuario_id: str) -> RespuestaAgente:

@@ -1,16 +1,40 @@
 # Avances de Marcelo (Agente A: prompt y conexión LLM)
 
-**Versión 1.0** · 2026-11-08
+**Versión 1.1** · 2026-11-13
 
 Documentación técnica del agente: [`agente.md`](agente.md).
 
 ## Estado de las tareas (`docs/etapa1.md`, Grupo Agente, Persona A)
 
-- [x] Prompt base del asistente en `src/agente/prompt.py`.
+- [x] Prompt base del asistente en `src/agente/prompt.py`, con la personalidad de Sara (2026-11-13).
 - [x] Conexión con Groq (`openai/gpt-oss-120b`) y `responder(texto, usuario_id) -> RespuestaAgente` en `src/agente/agente.py`, con el ciclo del agente en CrewAI.
 - [x] Herramientas de calendario expuestas al agente (`src/agente/tools.py`) y ahora conectadas al calendario real de Ingrid.
 - [x] Confirmación de eventos decidida por el código (`src/agente/confirmacion.py`).
-- [ ] Memoria entre turnos: es de Persona B. `usuario_id` ya llega a `responder()` para ese fin.
+- [ ] Memoria entre turnos: es de Persona B. `usuario_id` llega a `responder()` desde el token de la API. El saludo exclusivo al inicio depende de esa memoria.
+
+## 2026-11-13
+
+- **Qué hice (paso a paso):**
+  - **Paso 1: Personalidad de Sara en el prompt.** `construir_prompt_sistema` define a Sara como calmada, cercana, animada, profesional, resolutiva y proactiva. Trabaja en el contexto del CITT de Duoc UC, sede Viña del Mar, y no se presenta como servicio institucional aprobado.
+  - **Paso 2: Identidad y TTS.** Sara escribe "Sara" y no la sigla, para que la voz no deletree. Si preguntan quién es: "Soy Sara, tu Sistema de Agendamiento y Reserva de Actividades."
+  - **Paso 3: Franjas de saludo en Python.** `saludo_del_momento(ahora)` usa `ahora.hour` y `America/Santiago`: 00:00–11:59 "Buenos días", 12:00–19:59 "Buenas tardes", 20:00–23:59 "Buenas noches". El prompt no obliga a saludar en cada turno.
+  - **Paso 4: Proactividad.** El prompt exige consultar la agenda con `listar_eventos` antes de proponer, avisar de cruces y ofrecer reorganizar una agenda cargada.
+  - **Paso 5: Pregunta de confirmación desde el código.** Con propuesta pendiente, `responder()` devuelve `confirmacion.resumen()`, no el texto del modelo. Lo que el usuario oye es lo que se guarda.
+  - **Paso 6: Topes de entrada.** `responder()` acota el texto a 2000 caracteres antes de `confirmacion.resolver`. `listar_eventos` rechaza rangos de más de 31 días sin llamar al calendario.
+  - **Paso 7: Usuario fijo por instalación.** La API usa `API_USUARIO` como `usuario_id` e ignora el campo del body. Sin `API_AUTH_TOKEN` o sin `API_USUARIO` responde 503.
+  - **Paso 8: Docstrings** en las funciones nuevas o cambiadas de `prompt.py`, `confirmacion.py`, `tools.py`, `agente.py`, `api/main.py` y los tests.
+  - **Paso 9: Documentación.** Actualicé `agente.md` a la versión 1.1 y esta página.
+- **Resultado de las pruebas (2026-11-13):** 92 pasan, 3 fallan. Los 3 fallos son de `tests/test_api.py` y llaman al STT real de Groq (`groq.NotFoundError`). Ya fallaban antes de estos cambios. Las pruebas del agente no usan Groq real.
+- **Decisiones y por qué:**
+  - Saludo y franja los calcula el código. El modelo no calcula la hora.
+  - La pregunta de confirmación sale del código porque el texto del modelo puede no coincidir con lo guardado.
+  - El `usuario_id` es fijo por instalación porque el proyecto es de una sola persona. Un mapeo token-usuario era más complejo y no resolvía un caso que hoy no existe.
+  - Hallazgos de la auditoría de seguridad del agente: se corrigieron los 4 accionables (usuario desde el token, resumen de confirmación desde código, tope de 31 días en `listar_eventos`, tope de texto antes del resolver). El quinto es informativo (el delimitador `"""` no es frontera) y no requiere cambio.
+- **Qué falta o qué me bloquea:**
+  - **Saludo exclusivo al inicio.** Depende de la memoria de Persona B.
+  - **Validación del LLM real.** Las pruebas del prompt son estructurales. Falta comprobar con Groq real que el modelo sigue el tono, la proactividad y el cierre.
+  - **Cambio de contrato de la API.** El `usuario_id` del body se ignora y hay que configurar `API_USUARIO` en cada `.env`. Hay que avisar al equipo.
+  - **Estados visuales.** El brief pide cinco estados; `docs/meritxell/personalidad-sara.md` tiene siete (`error` y `cancelado`). Hay que decidir antes de codificarlos.
 
 ## 2026-11-07 y 2026-11-08
 

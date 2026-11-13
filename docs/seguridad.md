@@ -13,7 +13,7 @@ Reglas obligatorias para todo el equipo:
   usuario (o de una herramienta, ej. el cuerpo de un evento de calendario)
   nunca debe tratarse como instrucción del sistema.
 - Si la API queda expuesta a internet, debe exigir autenticación
-  (`API_AUTH_TOKEN` en `.env`, ver `src/api/main.py`).
+  (`API_AUTH_TOKEN` en `.env`; el usuario es fijo por `API_USUARIO`, ver `src/api/main.py`).
 - Ninguna clave o token se sube a git: todo vive en `.env` (ignorado) y se
   documenta sin valores reales en `.env.example`.
 - La voz del usuario viaja a un servicio externo (STT/LLM/TTS en la nube):
