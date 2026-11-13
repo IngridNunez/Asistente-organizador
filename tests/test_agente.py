@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,12 @@ def proponer():
     confirmacion.proponer("u1", "Reunión", "2026-11-10T17:00:00", "2026-11-10T18:00:00")
 
 
+def _tools_del_turno(usuario="u1"):
+    """Devuelve (proponer, listar) de un mismo turno: la propuesta solo vale tras consultar."""
+    proponer_tool, listar_tool = construir_tools(usuario)
+    return proponer_tool, listar_tool
+
+
 # Un sí con propuesta pendiente lo resuelve el código antes de importar crewai o llamar al LLM
 def test_si_ejecuta_la_propuesta_sin_llamar_al_modelo():
     proponer()
@@ -48,8 +55,15 @@ def test_falla_de_groq_descarta_la_propuesta(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "clave-de-prueba")
     monkeypatch.setenv("GROQ_BASE_URL", "http://localhost:9")
 
+    monkeypatch.setattr(confirmacion.calendario, "listar_eventos", lambda d, h: [])
+
     def kickoff_roto(self, *args, **kwargs):
-        proponer()  # el modelo alcanzó a proponer antes de caerse
+        # El modelo consultó y propuso por las tools del turno antes de caerse.
+        herramientas = {t.name: t for t in self.agents[0].tools}
+        herramientas["listar_eventos"].func("2026-11-10T00:00:00", "2026-11-11T00:00:00")
+        herramientas["proponer_evento_calendario"].func(
+            "Reunión", "2026-11-10T17:00:00", "2026-11-10T18:00:00"
+        )
         raise RuntimeError("groq caído")
 
     monkeypatch.setattr("crewai.Crew.kickoff", kickoff_roto)
@@ -71,9 +85,49 @@ def test_tool_proponer_con_fechas_malas_devuelve_error_al_modelo():
     assert confirmacion.pendiente_id("u1") is None
 
 
+# Cada error de propuesta nombra su causa real, sin trazas y sin "corrige las fechas" para títulos
+@pytest.mark.parametrize(
+    "titulo, inicio, fin, esperado",
+    [
+        ("   ", "2026-11-10T17:00:00", "2026-11-10T18:00:00", "vacío"),
+        ("a" * 201, "2026-11-10T17:00:00", "2026-11-10T18:00:00", "demasiado largo"),
+        ("Reunión", "mañana", "2026-11-10T18:00:00", "ISO 8601"),
+        ("Reunión", "2026-11-10T17:00:00", "2026-11-10T17:00:00", "posterior"),
+    ],
+)
+def test_tool_proponer_error_nombra_la_causa_real(titulo, inicio, fin, esperado):
+    resultado = construir_tools("u1")[0].func(titulo, inicio, fin)
+    assert resultado.startswith("Error:")
+    assert esperado in resultado
+    assert "Corrige las fechas" not in resultado
+    assert "Traceback" not in resultado
+
+
+def test_tool_proponer_titulo_largo_usa_el_limite_real():
+    limite = confirmacion.calendario.MAX_CHARS_TITULO
+    resultado = construir_tools("u1")[0].func(
+        "a" * (limite + 1), "2026-11-10T17:00:00", "2026-11-10T18:00:00"
+    )
+    assert f"máximo {limite} caracteres" in resultado
+
+
+def test_tool_proponer_invalida_no_llama_al_calendario(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(
+        confirmacion.calendario,
+        "crear_evento_calendario",
+        lambda *a: llamadas.append(a),
+    )
+    construir_tools("u1")[0].func("", "2026-11-10T17:00:00", "2026-11-10T18:00:00")
+    assert llamadas == []
+    assert confirmacion.pendiente_id("u1") is None
+
+
 # El modelo debe recibir lo que se guardó, para que el usuario confirme lo que se creará
-def test_tool_proponer_devuelve_lo_guardado():
-    proponer_tool = construir_tools("u1")[0]
+def test_tool_proponer_devuelve_lo_guardado(monkeypatch):
+    monkeypatch.setattr(confirmacion.calendario, "listar_eventos", lambda d, h: [])
+    proponer_tool, listar = _tools_del_turno("u1")
+    listar.func("2026-11-10T00:00:00", "2026-11-11T00:00:00")
     resultado = proponer_tool.func(
         "Reunión", "2026-11-10T17:00:00", "2026-11-10T18:00:00"
     )
@@ -261,6 +315,14 @@ def test_texto_largo_se_rechaza_sin_llamar_al_modelo(monkeypatch):
     assert llamadas == []
 
 
+class ErrorHTTP(Exception):
+    """Error con código HTTP, como los de los SDK de openai y groq: la clasificación mira `status_code`."""
+
+    def __init__(self, codigo, mensaje):
+        super().__init__(mensaje)
+        self.status_code = codigo
+
+
 def test_error_429_reintenta_y_luego_responde(monkeypatch):
     """Un 429 de Groq se reintenta; si se libera, la respuesta llega igual."""
     monkeypatch.setenv("GROQ_API_KEY", "clave-de-prueba")
@@ -271,7 +333,7 @@ def test_error_429_reintenta_y_luego_responde(monkeypatch):
     def kickoff_limitado_una_vez(self, *args, **kwargs):
         intentos.append(1)
         if len(intentos) == 1:
-            raise RuntimeError("Error code: 429 - rate_limit_exceeded")
+            raise ErrorHTTP(429, "Error code: 429 - rate_limit_exceeded")
         return "Tienes clase a las 9."
 
     monkeypatch.setattr("crewai.Crew.kickoff", kickoff_limitado_una_vez)
@@ -287,7 +349,7 @@ def test_error_429_persistente_da_mensaje_sin_traza(monkeypatch):
     monkeypatch.setattr("src.agente.agente.time.sleep", lambda s: None)
 
     def kickoff_siempre_429(self, *args, **kwargs):
-        raise RuntimeError("Error code: 429 - rate_limit_exceeded")
+        raise ErrorHTTP(429, "Error code: 429 - rate_limit_exceeded")
 
     monkeypatch.setattr("crewai.Crew.kickoff", kickoff_siempre_429)
     respuesta = responder("¿qué tengo mañana?", "u1")
@@ -319,4 +381,4 @@ def test_listar_acepta_rango_de_31_dias(monkeypatch):
     """Un rango de exactamente 31 días se consulta al calendario."""
     monkeypatch.setattr(confirmacion.calendario, "listar_eventos", lambda d, h: [])
     listar = construir_tools("u1")[1]
-    assert listar.func("2026-11-01T00:00:00", "2026-12-02T00:00:00") == "[]"
+    assert json.loads(listar.func("2026-11-01T00:00:00", "2026-12-02T00:00:00"))["eventos"] == []
