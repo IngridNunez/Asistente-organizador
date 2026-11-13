@@ -18,7 +18,8 @@ def _get_client() -> Groq:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise RuntimeError("Falta GROQ_API_KEY en .env")
-        _client = Groq(api_key=api_key)
+        # El SDK agrega /openai/v1 solo; GROQ_BASE_URL (con path, para el agente) duplicaría el path.
+        _client = Groq(api_key=api_key, base_url="https://api.groq.com")
     return _client
 
 
