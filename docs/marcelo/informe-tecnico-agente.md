@@ -17,7 +17,7 @@ Garantías verificadas con pruebas deterministas:
 - Dos confirmaciones simultáneas no ejecutan dos veces la misma propuesta (dentro de un proceso).
 - Un error del calendario no se comunica como éxito.
 
-Resultados técnicos (detalle en Resultados de pruebas): en esta revisión, la suite offline (`pytest -q --ignore=tests/test_api.py`) tiene 203 pruebas aprobadas y 0 fallidas. `tests/test_api.py` no se ejecutó: llama al STT real. Sus 3 fallos son preexistentes (Fallos preexistentes de integración).
+Resultados técnicos (detalle en Resultados de pruebas): en esta revisión, la suite offline (`pytest -q --ignore=tests/test_api.py`) tiene 209 pruebas aprobadas y 0 fallidas. `tests/test_api.py` no se ejecutó: llama al STT real. Sus 3 fallos son preexistentes (Fallos preexistentes de integración).
 
 Riesgos residuales principales:
 
@@ -211,11 +211,33 @@ Las garantías dependen del código de este proceso. Ninguna depende de que el m
 
 | Comando | Aprobadas | Fallidas | Omitidas |
 | --- | --- | --- | --- |
-| `.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_api.py` | 203 | 0 | 0 |
+| `.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_api.py` | 209 | 0 | 0 |
+| `.venv/Scripts/python.exe -m pytest tests/test_flujos_agente.py -q` | 12 | 0 | 0 |
 | `.venv/Scripts/python.exe -m pytest tests/test_agente.py -q` | 42 | 0 | 0 |
 | `.venv/Scripts/python.exe -m pytest tests/test_confirmacion.py -q` | 47 | 0 | 0 |
 | `.venv/Scripts/python.exe -m pytest tests/test_reintentos_agente.py -q` | 12 | 0 | 0 |
-| `.venv/Scripts/python.exe -m pytest tests/test_concurrencia_agente.py -q` | 6 | 0 | 0 |
+| `.venv/Scripts/python.exe -m pytest tests/test_concurrencia_agente.py -q` | 7 | 0 | 0 |
+| `.venv/Scripts/python.exe -m pytest tests/test_presupuesto_turno.py -q` | 7 | 0 | 0 |
+
+**Pruebas de integración (`test_flujos_agente.py`, `test_concurrencia_agente.py`):** pasan con el modelo simulado (`Crew.kickoff` falso, herramientas reales, `publicar()` y presupuesto reales) y calendario simulado.
+
+Matriz de integración: requisito, prueba, aserción relevante.
+
+| Requisito | Prueba | Aserción relevante |
+| --- | --- | --- |
+| Propuesta A del intento fallido no se publica durante el turno | `test_429_tras_propuesta_publica_solo_la_del_reintento` | El estado observado en cada intento es `None` |
+| Publicación solo de B, sin reemplazo artificial | `test_429_tras_propuesta_publica_solo_la_del_reintento` | `reemplazo is None`, `confirmacion_pendiente == accion.id`, `"Reunión" not in texto` |
+| Presupuesto compartido entre intentos | `test_429_tras_propuesta_publica_solo_la_del_reintento` | Log `crew_executions=2 retry_count=1 tool_calls=4` |
+| Confirmación única y duplicada sin efecto | `test_429_tras_propuesta_publica_solo_la_del_reintento` | `creados == [("Almuerzo", INI2, FIN2)]` tras dos "sí" |
+| Presupuesto agotado en el intento fallido | `test_presupuesto_agotado_en_el_intento_fallido_no_publica_nada` | `MENSAJE_PRESUPUESTO` en la llamada 7; sin pendiente; log `tool_calls=7` |
+| Reemplazo de A por C tras 429, dos confirmaciones | `test_reemplazo_con_429_se_ejecuta_solo_tras_dos_si` | B no aparece; primer "sí" no crea; `creados == [("Almuerzo", …)]` |
+| Rechazo del reemplazo conserva A | `test_reemplazo_con_429_rechazado_conserva_a` | Respuesta "Listo, mantengo la propuesta anterior."; luego se crea A |
+| Error permanente sin publicar ni alterar A | `test_error_permanente_conserva_la_propuesta_vigente` | 3 intentos; texto `MENSAJE_ERROR` sin "429"; A intacta; sin creación |
+| Fallo tardío de un turno no modifica lo publicado por otro | `test_fallo_tardio_de_turno_no_modifica_propuesta_publicada_por_otro` | Pendiente es "Almuerzo"; sin `MENSAJE_CAMBIO` |
+| Conflicto concurrente con aviso | `test_dos_turnos_exitosos_publican_una_sola_propuesta`, `test_publicacion_tardia_no_sobrescribe_propuesta_publicada_antes` | Un solo `MENSAJE_CAMBIO`; propuesta publicada intacta |
+| Propuesta consumida no resucita | `test_propuesta_no_resucita_si_otro_turno_la_consumio` | Calendario con solo la primera creación |
+
+Verificación de la matriz: las pruebas se mutaron a propósito. Quitar el vaciado de propuestas del intento fallido hace fallar `test_429_tras_propuesta_publica_solo_la_del_reintento`, `test_presupuesto_agotado_en_el_intento_fallido_no_publica_nada`, `test_propuesta_de_intento_fallido_no_queda_pendiente` y `test_propuesta_del_reintento_no_es_reemplazo`. Anular la comprobación de identidad de `publicar()` hace fallar cuatro pruebas de concurrencia. Las fuentes se restauraron y son idénticas a las de `HEAD`.
 
 No se ejecutó `tests/test_api.py` en esta revisión. Sus pruebas llaman al STT real de Groq, y la revisión no debe usar servicios externos.
 
