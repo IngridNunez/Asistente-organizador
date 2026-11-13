@@ -1,7 +1,11 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from src.agente import confirmacion
 from src.agente.agente import _crear_llm, responder
+from src.agente.prompt import ZONA_HORARIA, construir_prompt_sistema, saludo_del_momento
 from src.agente.tools import construir_tools
 
 
@@ -82,3 +86,83 @@ def test_tool_listar_eventos_no_propaga_errores_del_calendario(monkeypatch):
     assert listar.func("2026-11-10T00:00:00", "2026-11-11T00:00:00").startswith(
         "Error:"
     )
+
+
+def ahora_en(hora: int, minuto: int = 0) -> datetime:
+    return datetime(2026, 11, 13, hora, minuto, tzinfo=ZoneInfo(ZONA_HORARIA))
+
+
+# Franjas horarias deterministas: el reloj es el de la prueba, no el de la ejecución
+@pytest.mark.parametrize(
+    "hora, minuto, saludo",
+    [
+        (0, 0, "Buenos días"),
+        (9, 0, "Buenos días"),
+        (11, 59, "Buenos días"),
+        (12, 0, "Buenas tardes"),
+        (15, 0, "Buenas tardes"),
+        (19, 59, "Buenas tardes"),
+        (20, 0, "Buenas noches"),
+        (21, 0, "Buenas noches"),
+        (23, 59, "Buenas noches"),
+    ],
+)
+def test_saludo_por_franja_horaria(hora, minuto, saludo):
+    assert saludo_del_momento(ahora_en(hora, minuto)) == saludo
+    assert f"Franja horaria actual: {saludo}." in construir_prompt_sistema(
+        ahora_en(hora, minuto)
+    )
+
+
+# Pruebas estructurales: fijan intenciones clave del prompt, no la redacción exacta
+def test_prompt_identidad_y_personalidad():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "Eres Sara" in prompt
+    assert "Soy Sara, tu Sistema de Agendamiento y Reserva de Actividades." in prompt
+    for rasgo in ("calmada", "cercana", "animada"):
+        assert rasgo in prompt
+    assert "CITT de Duoc UC" in prompt
+    assert "No eres un servicio institucional" in prompt
+    assert "No tienes emociones" in prompt
+
+
+def test_prompt_tts_y_tuteo():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "Escribe Sara en tus respuestas, no la sigla" in prompt
+    assert "Usa la sigla S.A.R.A. solo si preguntan" in prompt
+    assert "tienes" in prompt and "quieres" in prompt and "puedes" in prompt
+    assert "Nunca uses voseo" in prompt
+    assert "tenés" not in prompt and "querés" not in prompt and "podés" not in prompt
+    assert "No uses Markdown" in prompt
+
+
+def test_prompt_humor_restringido():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "Nunca uses humor ni sarcasmo en confirmaciones, errores" in prompt
+    assert "Nunca te burles del usuario" in prompt
+
+
+def test_prompt_consulta_agenda_antes_de_proponer():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "Antes de proponer un evento" in prompt
+    assert "herramienta de listar eventos" in prompt
+    assert "cruce de horario" in prompt
+
+
+def test_prompt_confirmacion_y_exito_de_herramienta():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "¿La confirmo?" in prompt
+    assert "Autorizar no es lo mismo que ejecutar" in prompt
+    assert "resultado satisfactorio de la herramienta" in prompt
+
+
+def test_prompt_cierre_condicionado():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "Usa \"¿Algo más?\" solo tras completar una tarea" in prompt
+    assert "confirmación pendiente" in prompt
+
+
+def test_prompt_limites_sin_reservas_inexistentes():
+    prompt = construir_prompt_sistema(ahora_en(15))
+    assert "No puedes reservar salas" in prompt
+    assert "Eso no lo puedo hacer" in prompt
