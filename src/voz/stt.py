@@ -18,7 +18,13 @@ def _get_client() -> Groq:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise RuntimeError("Falta GROQ_API_KEY en .env")
-        _client = Groq(api_key=api_key)
+        # GROQ_BASE_URL incluye "/openai/v1" porque lo usa CrewAI para el agente. El SDK de
+        # Groq lee esa misma variable y le agrega "/openai/v1/..." por su cuenta, lo que
+        # duplicaba el prefijo y daba 404. Se quita el sufijo para compartir una sola variable.
+        base = os.getenv("GROQ_BASE_URL", "https://api.groq.com")
+        base = base.rstrip("/").removesuffix("/openai/v1")
+        _client = Groq(api_key=api_key, base_url=base)
+
     return _client
 
 
