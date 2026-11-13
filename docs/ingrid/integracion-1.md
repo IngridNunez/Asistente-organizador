@@ -108,6 +108,8 @@ cuenta de Google de cada persona. También se puede hacer antes con
 - **Memoria por consola:** el agente respondió una pregunta usando un dato dicho en el mensaje
   anterior (el track de IA de los martes), sin que se repitiera.
 
+  ![Conversación por consola que muestra la memoria](img/memoria-consola.png)
+
 No se probó en esta integración la creación del evento por la API. El calendario real sí se
 había probado por consola el 2026-11-08 (ver `docs/ingrid/ingrid.md`).
 
