@@ -249,3 +249,37 @@ def test_turno_sin_propuestas_no_falla_por_cambio_concurrente(monkeypatch, entor
     assert resultados["T1"].texto == "Hola"
     assert confirmacion.pendiente_id("u1") is None
     assert entorno == []
+
+
+def test_fallo_tardio_de_turno_no_modifica_propuesta_publicada_por_otro(monkeypatch, entorno):
+    """T1 propone y falla después de que T2 publica; la propuesta publicada por T2 no cambia."""
+    mapa = comportamientos(monkeypatch)
+    dentro, sigue = threading.Event(), threading.Event()
+
+    def t1(h):
+        """Propone Reunión, espera a que T2 publique y después falla."""
+        proponer(h, "Reunión")
+        dentro.set()
+        assert sigue.wait(TIEMPO)
+        raise RuntimeError("groq caído")
+
+    def t2(h):
+        """Propone Almuerzo y termina bien."""
+        proponer(h, "Almuerzo", INI2, FIN2)
+        return "ok"
+
+    mapa["T1"] = t1
+    mapa["MainThread"] = t2
+    resultados = {}
+    hilo = lanzar("T1", "agéndame una reunión", resultados)
+    assert dentro.wait(TIEMPO)
+    agente.responder("agéndame un almuerzo", "u1")
+    sigue.set()
+    terminar(hilo)
+
+    assert resultados["T1"].texto == "Tuve un problema para responder. Intenta de nuevo en un momento."
+    assert not resultados["T1"].texto.startswith(MENSAJE_CAMBIO)
+    accion = confirmacion._PENDIENTES["u1"]
+    assert accion.titulo == "Almuerzo"
+    assert accion.reemplazo is None
+    assert entorno == []
