@@ -246,6 +246,21 @@ def test_otro_codigo_http_con_429_en_el_texto_no_se_reintenta(monkeypatch, entor
     assert intentos["n"] == 1
 
 
+def test_configuracion_no_multiplica_reintentos_del_proveedor(monkeypatch, entorno):
+    """El LLM y el agente no añaden reintentos propios: el bucle de `responder` es el único."""
+    capturados = {}
+
+    def kickoff(self, *args, **kwargs):
+        """Guarda la configuración con la que CrewAI ejecutaría el turno."""
+        capturados["max_retry_limit"] = self.agents[0].max_retry_limit
+        capturados["max_retries"] = self.agents[0].llm.max_retries
+        return "ok"
+
+    monkeypatch.setattr(Crew, "kickoff", kickoff)
+    agente.responder("hola", "u1")
+    assert capturados == {"max_retry_limit": 0, "max_retries": 0}
+
+
 def test_error_500_no_se_reintenta(monkeypatch, entorno):
     """Un error 500 del proveedor no entra en la política de reintento por límite."""
 

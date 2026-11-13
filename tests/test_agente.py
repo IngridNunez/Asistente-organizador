@@ -13,7 +13,7 @@ from src.agente.agente import (
     responder,
 )
 from src.agente.prompt import ZONA_HORARIA, construir_prompt_sistema, saludo_del_momento
-from src.agente.tools import construir_tools
+from src.agente.tools import MetricasTurno, construir_tools
 
 
 # Cada test parte sin propuestas y con un calendario que no hace nada real
@@ -126,7 +126,8 @@ def test_tool_proponer_invalida_no_llama_al_calendario(monkeypatch):
 # El modelo debe recibir lo que se guardó, para que el usuario confirme lo que se creará
 def test_tool_proponer_devuelve_lo_guardado(monkeypatch):
     monkeypatch.setattr(confirmacion.calendario, "listar_eventos", lambda d, h: [])
-    proponer_tool, listar = _tools_del_turno("u1")
+    metricas = MetricasTurno()
+    proponer_tool, listar = construir_tools("u1", metricas)
     listar.func("2026-11-10T00:00:00", "2026-11-11T00:00:00")
     resultado = proponer_tool.func(
         "Reunión", "2026-11-10T17:00:00", "2026-11-10T18:00:00"
@@ -134,6 +135,7 @@ def test_tool_proponer_devuelve_lo_guardado(monkeypatch):
     assert "Reunión" in resultado
     assert "2026-11-10T17:00:00" in resultado
     assert "2026-11-10T18:00:00" in resultado
+    confirmacion.publicar("u1", None, metricas.propuestas)
     assert confirmacion.pendiente_id("u1") is not None
 
 

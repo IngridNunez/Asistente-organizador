@@ -66,8 +66,6 @@ class AccionPendiente:
     advertencias: tuple[str, ...] = ()
     # Propuesta nueva que espera autorización para reemplazar esta. Ver `proponer()`.
     reemplazo: "AccionPendiente | None" = None
-    # Turno del modelo que la propuso. Permite quitar solo lo de un intento fallido.
-    turno: str = ""
 
 
 @dataclass(frozen=True)
@@ -244,15 +242,11 @@ def proponer(
     inicio: str,
     fin: str,
     advertencias: tuple[str, ...] = (),
-    turno: str = "",
 ) -> str:
     """Registra una propuesta de evento. La tool del agente llama aquí, después de validar la consulta.
 
     NO crea nada. Si ya hay una propuesta vigente, la nueva queda como reemplazo pendiente:
     el usuario debe autorizar el cambio y luego confirmar la propuesta nueva.
-
-    Args:
-        turno: turno del modelo que propone; lo usa `descartar_turno` si ese intento falla.
 
     Returns:
         El id de lo que el usuario debe responder ahora (ver `pendiente_id`).
@@ -268,7 +262,6 @@ def proponer(
         fin,
         time.monotonic(),
         tuple(advertencias),
-        turno=turno,
     )
     with _LOCK:
         _purgar_vencidas()
@@ -297,23 +290,44 @@ def descartar(usuario_id: str) -> None:
         _PENDIENTES.pop(usuario_id, None)
 
 
-def descartar_turno(usuario_id: str, turno: str) -> None:
-    """Quita lo que propuso el turno `turno` (intento fallido). Lo de otros turnos se conserva.
-
-    Si el turno había creado la propuesta principal, la sustituye el reemplazo ajeno, si existe.
-    """
+def capturar_estado(usuario_id: str) -> AccionPendiente | None:
+    """Estado con el que empieza un turno. `publicar` solo aplica si sigue siendo ese mismo objeto."""
     with _LOCK:
-        accion = _PENDIENTES.get(usuario_id)
-        if accion is None:
-            return
-        if accion.reemplazo is not None and accion.reemplazo.turno == turno:
-            accion = dataclasses.replace(accion, reemplazo=None)
-        if accion.turno != turno:
-            _PENDIENTES[usuario_id] = accion
-        elif accion.reemplazo is None:
-            _PENDIENTES.pop(usuario_id, None)
-        else:
-            _PENDIENTES[usuario_id] = accion.reemplazo
+        return _PENDIENTES.get(usuario_id)
+
+
+def publicar(
+    usuario_id: str,
+    base: AccionPendiente | None,
+    propuestas: list[tuple[str, str, str, tuple[str, ...]]],
+) -> bool:
+    """Aplica al final de un turno exitoso las propuestas que preparó, si el estado no cambió.
+
+    Un turno que falla nunca llega aquí: lo que propuso no toca el estado compartido.
+    Si otro turno cambió la propuesta desde `base`, no se aplica nada.
+
+    Args:
+        base: estado que devolvió `capturar_estado` al empezar el turno.
+        propuestas: (titulo, inicio, fin, advertencias) ya validados por la tool.
+
+    Returns:
+        True si se aplicaron o no había nada que aplicar; False si el estado cambió.
+    """
+    if not propuestas:
+        return True
+    with _LOCK:
+        _purgar_vencidas()
+        if _PENDIENTES.get(usuario_id) is not base:
+            return False
+        for titulo, inicio, fin, advertencias in propuestas:
+            nueva = AccionPendiente(
+                uuid.uuid4().hex[:8], titulo, inicio, fin, time.monotonic(), advertencias
+            )
+            actual = _PENDIENTES.get(usuario_id)
+            _PENDIENTES[usuario_id] = (
+                nueva if actual is None else dataclasses.replace(actual, reemplazo=nueva)
+            )
+        return True
 
 
 def cerrar_turno(usuario_id: str, visto: str | None) -> None:

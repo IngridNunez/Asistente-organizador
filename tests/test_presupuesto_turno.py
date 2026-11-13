@@ -124,35 +124,6 @@ def test_reintento_no_duplica_la_propuesta(monkeypatch, herramientas):
     assert confirmacion._PENDIENTES["u1"].reemplazo is None
 
 
-def test_descartar_turno_quita_solo_el_reemplazo_del_turno():
-    original = confirmacion.proponer("u1", "Gimnasio", "2026-11-12T19:00:00", "2026-11-12T20:00:00")
-    confirmacion.proponer("u1", TITULO_OK, INICIO, FIN, turno="t1")  # queda como reemplazo
-    confirmacion.descartar_turno("u1", "t1")
-    assert confirmacion.pendiente_id("u1") == original
-    assert confirmacion._PENDIENTES["u1"].reemplazo is None
-
-
-def test_descartar_turno_sin_pendiente_previa_borra_lo_creado():
-    confirmacion.proponer("u1", TITULO_OK, INICIO, FIN, turno="t1")
-    confirmacion.descartar_turno("u1", "t1")
-    assert confirmacion.pendiente_id("u1") is None
-
-
-def test_descartar_turno_ajeno_no_toca_el_reemplazo():
-    confirmacion.proponer("u1", "Gimnasio", "2026-11-12T19:00:00", "2026-11-12T20:00:00")
-    confirmacion.proponer("u1", TITULO_OK, INICIO, FIN, turno="otro")
-    confirmacion.descartar_turno("u1", "t1")
-    assert confirmacion._PENDIENTES["u1"].reemplazo.titulo == TITULO_OK
-
-
-def test_descartar_turno_promueve_el_reemplazo_ajeno_si_el_turno_creo_la_principal():
-    confirmacion.proponer("u1", TITULO_OK, INICIO, FIN, turno="t1")  # principal del turno
-    confirmacion.proponer("u1", "Almuerzo", INI2, FIN2, turno="otro")  # reemplazo de otro turno
-    confirmacion.descartar_turno("u1", "t1")
-    assert confirmacion._PENDIENTES["u1"].titulo == "Almuerzo"
-    assert confirmacion._PENDIENTES["u1"].reemplazo is None
-
-
 def test_confirmacion_no_llama_al_modelo(monkeypatch, herramientas):
     confirmacion.proponer("u1", TITULO_OK, INICIO, FIN)
 

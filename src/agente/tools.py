@@ -28,13 +28,14 @@ calendario = confirmacion.calendario
 class MetricasTurno:
     """Contadores de un turno. Los llena el agente y las tools; se registran en log sin contenido.
 
-    `turno_id` identifica el turno: las propuestas y consultas de todos sus intentos lo llevan.
+    `propuestas` son las que preparó el turno: `confirmacion.publicar` las aplica solo si el turno
+    termina bien. Un intento fallido las vacía antes de reintentar.
     """
 
     tool_calls: int = 0
     crew_executions: int = 0
     retry_count: int = 0
-    turno_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    propuestas: list[tuple[str, str, str, tuple[str, ...]]] = field(default_factory=list)
 
 
 def _registrar_llamada(metricas: MetricasTurno) -> bool:
@@ -56,9 +57,9 @@ def construir_tools(usuario_id: str, metricas: MetricasTurno | None = None) -> l
     Returns:
         Lista con `proponer_evento_calendario` y `listar_eventos`.
     """
-    metricas = metricas if metricas is not None else MetricasTurno()
-    turno_id = metricas.turno_id
+    turno_id = uuid.uuid4().hex[:8]
     consultas: list[confirmacion.ConsultaAgenda] = []
+    metricas = metricas if metricas is not None else MetricasTurno()
 
     @tool("proponer_evento_calendario")
     def proponer_evento_calendario(titulo: str, inicio: str, fin: str) -> str:
@@ -69,7 +70,7 @@ def construir_tools(usuario_id: str, metricas: MetricasTurno | None = None) -> l
         if not _registrar_llamada(metricas):
             return MENSAJE_PRESUPUESTO
         try:
-            confirmacion.validar_propuesta(titulo, inicio, fin)
+            titulo = confirmacion.validar_propuesta(titulo, inicio, fin)
         except ValueError as e:
             return f"Error: {e}. Corrige ese dato y vuelve a intentarlo, o pregúntale al usuario."
         consulta = confirmacion.consulta_que_cubre(consultas, usuario_id, turno_id, inicio, fin)
@@ -80,7 +81,7 @@ def construir_tools(usuario_id: str, metricas: MetricasTurno | None = None) -> l
                 "Consúltala con listar_eventos antes de proponer el evento."
             )
         advertencias = confirmacion.advertencias_de(consulta, inicio, fin)
-        confirmacion.proponer(usuario_id, titulo, inicio, fin, advertencias, turno=turno_id)
+        metricas.propuestas.append((titulo, inicio, fin, tuple(advertencias)))
         # Se devuelve lo guardado para que el modelo le repita al usuario exactamente eso.
         return (
             f"Propuesta registrada: {titulo}, de {inicio} a {fin}. "

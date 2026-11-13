@@ -5,7 +5,7 @@ import json
 import pytest
 
 from src.agente import confirmacion
-from src.agente.tools import construir_tools
+from src.agente.tools import MetricasTurno, construir_tools
 
 INI = "2026-11-10T15:00:00"
 FIN = "2026-11-10T16:00:00"
@@ -32,9 +32,18 @@ def _agenda(monkeypatch, eventos):
     monkeypatch.setattr(confirmacion.calendario, "listar_eventos", lambda d, h: eventos)
 
 
+_TURNOS: dict[str, MetricasTurno] = {}
+
+
 def _turno(usuario="u1"):
-    proponer, listar = construir_tools(usuario)
-    return proponer, listar
+    metricas = MetricasTurno()
+    _TURNOS[usuario] = metricas
+    return construir_tools(usuario, metricas)
+
+
+def _publicar(usuario="u1"):
+    """Aplica lo que propuso el último turno de `usuario`, como hace `responder` al terminar bien."""
+    confirmacion.publicar(usuario, None, _TURNOS[usuario].propuestas)
 
 
 def test_propuesta_sin_consulta_no_se_guarda(limpio):
@@ -50,6 +59,7 @@ def test_consulta_exitosa_que_cubre_permite_proponer(monkeypatch):
     proponer, listar = _turno()
     listar.func(*DIA)
     assert proponer.func("Reunión", INI, FIN).startswith("Propuesta registrada")
+    _publicar()
     assert confirmacion.pendiente_id("u1") is not None
 
 
@@ -123,6 +133,7 @@ def test_agenda_vacia_consultada_permite_sin_advertencias(monkeypatch):
     proponer, listar = _turno()
     listar.func(*DIA)
     proponer.func("Reunión", INI, FIN)
+    _publicar()
     assert confirmacion.resumen("u1") == (
         "Puedo registrar Reunión el 10/11 de 15:00 a 16:00. ¿La confirmo?"
     )
@@ -133,6 +144,7 @@ def test_conflicto_se_avisa_en_el_resumen(monkeypatch):
     proponer, listar = _turno()
     listar.func(*DIA)
     proponer.func("Reunión", INI, FIN)
+    _publicar()
     resumen = confirmacion.resumen("u1")
     assert "Coincide con otra actividad de 15:30 a 16:30." in resumen
     assert resumen.endswith("¿La confirmo?")
@@ -143,6 +155,7 @@ def test_evento_consecutivo_no_es_conflicto(monkeypatch):
     proponer, listar = _turno()
     listar.func(*DIA)
     proponer.func("Reunión", INI, FIN)
+    _publicar()
     assert "Coincide" not in confirmacion.resumen("u1")
 
 
@@ -151,6 +164,7 @@ def test_dia_completo_se_avisa_como_tal(monkeypatch):
     proponer, listar = _turno()
     listar.func(*DIA)
     proponer.func("Reunión", INI, FIN)
+    _publicar()
     assert "Coincide con un evento de día completo." in confirmacion.resumen("u1")
 
 
@@ -159,7 +173,9 @@ def test_propuesta_invalida_conserva_la_pendiente_valida(monkeypatch):
     proponer, listar = _turno()
     listar.func(*DIA)
     proponer.func("Reunión", INI, FIN)
+    _publicar()
     id_valido = confirmacion.pendiente_id("u1")
+    assert id_valido is not None
     assert proponer.func("", INI, FIN).startswith("Error:")
     assert proponer.func(
         "Otra", "2026-11-10T20:00:00", "2026-11-10T19:00:00"

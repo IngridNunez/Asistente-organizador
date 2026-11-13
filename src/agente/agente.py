@@ -88,6 +88,8 @@ def _crear_llm() -> "LLM":
         custom_openai=True,
         timeout=TIMEOUT_LLM_SEGUNDOS,
         max_tokens=MAX_TOKENS_RESPUESTA,
+        # Sin reintentos del SDK: el bucle de `responder` decide. Medido: 45 -> 9 solicitudes con 429 persistente.
+        max_retries=0,
     )
 
 
@@ -124,6 +126,8 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     respuesta_confirmacion = confirmacion.resolver(usuario_id, texto, visto)
     if respuesta_confirmacion is not None:
         return RespuestaAgente(texto=respuesta_confirmacion)
+    # Estado de partida: al terminar, `publicar` solo aplica las propuestas si nadie lo cambió.
+    base = confirmacion.capturar_estado(usuario_id)
 
     # crewai se importa aquí (pesado): la API con stubs y pytest no lo necesitan.
     try:
@@ -146,6 +150,8 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
         tools=construir_tools(usuario_id, metricas),
         llm=_crear_llm(),
         max_iter=MAX_PASOS_AGENTE,
+        # Sin reintentos internos de CrewAI: un reintento por bucle de `responder`, no por capa.
+        max_retry_limit=0,
         verbose=False,
     )
     tarea = Task(
@@ -162,8 +168,8 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
             ).kickoff()
             break
         except Exception as e:
-            # Lo que propuso este intento no llegó al usuario: se quita antes de reintentar o responder.
-            confirmacion.descartar_turno(usuario_id, metricas.turno_id)
+            # Lo que propuso este intento no llegó al usuario: no se publica, ni en este turno ni en el reintento.
+            metricas.propuestas.clear()
             # 429: el límite por minuto se libera solo; esperar y reintentar.
             if _es_limite_de_uso(e) and intento < REINTENTOS_RATE_LIMIT:
                 metricas.retry_count += 1
@@ -178,6 +184,13 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
     # kickoff() sin stream devuelve CrewOutput; el isinstance acota el tipo (también puede ser streaming)
     uso = resultado.token_usage if isinstance(resultado, CrewOutput) else None
     _registrar_metricas(metricas, inicio, uso)
+    if not confirmacion.publicar(usuario_id, base, metricas.propuestas):
+        # Otro turno cambió la propuesta mientras éste trabajaba: no se aplica nada y se muestra la vigente.
+        vigente = confirmacion.resumen(usuario_id)
+        return RespuestaAgente(
+            texto=" ".join(p for p in (confirmacion.MENSAJE_CAMBIO, vigente) if p),
+            confirmacion_pendiente=confirmacion.pendiente_id(usuario_id),
+        )
     texto_respuesta = (
         resultado.raw if isinstance(resultado, CrewOutput) else str(resultado)
     )
