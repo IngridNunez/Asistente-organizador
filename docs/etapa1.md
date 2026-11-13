@@ -96,13 +96,13 @@ a la otra.
 
 **Persona A — Calendario (etapa 2)**
 
-- [ ] Resolver el flujo de OAuth real de Google Calendar (credenciales,
+- [x] Resolver el flujo de OAuth real de Google Calendar (credenciales,
       scopes, dónde queda guardado el token — documentarlo en
       `docs/seguridad.md`).
-- [ ] Implementar `crear_evento_calendario` y `listar_eventos` reales en
+- [x] Implementar `crear_evento_calendario` y `listar_eventos` reales en
       `src/herramientas/calendario.py`, respetando exactamente la firma de
       `docs/contratos.md` (no hace falta esperar a que Agente las use).
-- [ ] Avisar al Grupo Agente antes de reemplazar `calendario_falso.py` por la
+- [x] Avisar al Grupo Agente antes de reemplazar `calendario_falso.py` por la
       integración real, para que el cambio sea de una línea (mismo nombre de
       función, mismo contrato).
 
