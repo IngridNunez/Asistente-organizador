@@ -116,6 +116,16 @@ def proponer(usuario_id: str, titulo: str, inicio: str, fin: str) -> str:
     return accion.id
 
 
+def resumen(usuario_id: str) -> str | None:
+    """Texto de confirmación armado desde la propuesta guardada, no desde lo que dijo el modelo."""
+    accion = _PENDIENTES.get(usuario_id)
+    if accion is None:
+        return None
+    desde = datetime.fromisoformat(accion.inicio)
+    hasta = datetime.fromisoformat(accion.fin)
+    return f"Puedo registrar {accion.titulo} el {desde:%d/%m} de {desde:%H:%M} a {hasta:%H:%M}. ¿La confirmo?"
+
+
 def descartar(usuario_id: str) -> None:
     """Elimina la acción pendiente del usuario, si existe."""
     _PENDIENTES.pop(usuario_id, None)

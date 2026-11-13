@@ -1,5 +1,7 @@
 import logging
 import os
+import re
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -21,6 +23,12 @@ load_dotenv()
 
 MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
 MAX_CHARS_TEXTO = 2000  # tope de lo que se manda al LLM por turno (costo y abuso)
+MENSAJE_TEXTO_LARGO = "Tu mensaje es muy largo para procesarlo. Resúmelo y vuelve a decirlo."
+# Groq cuenta max_tokens contra el límite por minuto: una respuesta corta evita 429 innecesarios.
+# Va alto porque el modelo gpt-oss gasta tokens en razonamiento antes de responder.
+MAX_TOKENS_RESPUESTA = 1500
+REINTENTOS_RATE_LIMIT = 2  # reintentos ante 429 (límite de tokens por minuto de Groq)
+ESPERA_RATE_LIMIT_SEGUNDOS = 4  # espera base; se duplica en cada reintento
 TIMEOUT_LLM_SEGUNDOS = (
     30  # si Groq no responde en este tiempo, el turno falla con mensaje
 )
@@ -29,6 +37,14 @@ MAX_PASOS_AGENTE = (
 )
 
 log = logging.getLogger(__name__)
+
+# El modelo a veces pide confirmar sin haber llamado a proponer_evento_calendario: no hay nada que confirmar.
+PATRON_CONFIRMACION_SIN_PROPUESTA = re.compile(
+    r"¿\s*(lo|la)\s+confirmo\b|puedo registrar", re.IGNORECASE
+)
+MENSAJE_SIN_PROPUESTA = (
+    "No pude preparar ese evento. Dime el título, el día, la hora de inicio y la duración."
+)
 
 # CrewAI loguea cada reintento y avisos de conteo de tokens: solo nos sirve nuestro propio log.
 logging.getLogger("crewai").setLevel(logging.CRITICAL)
@@ -65,6 +81,7 @@ def _crear_llm() -> "LLM":
         api_key=api_key,
         custom_openai=True,
         timeout=TIMEOUT_LLM_SEGUNDOS,
+        max_tokens=MAX_TOKENS_RESPUESTA,
     )
 
 
@@ -88,6 +105,9 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
             llamada al modelo no se propagan: devuelven un mensaje de error hablado.
     """
     texto = texto.strip()
+    if len(texto) > MAX_CHARS_TEXTO:
+        # No se recorta: un corte silencioso perdería la parte final (la pregunta, a menudo).
+        return RespuestaAgente(texto=MENSAJE_TEXTO_LARGO)
     if not texto:
         return RespuestaAgente(texto="No te escuché bien. ¿Me lo repites?")
 
@@ -106,10 +126,8 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
             "Falta crewai: activa .venv con Python 3.12 y corre pip install -r requirements.txt"
         ) from e
 
-    # Solo se acota el largo. La defensa contra inyección es que ninguna tool modifica datos
-    # sin el sí del usuario; un delimitador en el prompt no es una frontera de seguridad.
-    texto = texto[:MAX_CHARS_TEXTO]
-
+    # La defensa contra inyección es que ninguna tool modifica datos sin el sí del usuario;
+    # un delimitador en el prompt no es una frontera de seguridad.
     ahora = datetime.now(ZoneInfo(ZONA_HORARIA))
     agente = Agent(
         role="Asistente personal de voz",
@@ -125,27 +143,48 @@ def responder(texto: str, usuario_id: str) -> RespuestaAgente:
         expected_output="Respuesta breve en español, en frases cortas, lista para leer en voz alta.",
         agent=agente,
     )
-    try:
-        resultado = Crew(
-            agents=[agente], tasks=[tarea], verbose=False, tracing=False
-        ).kickoff()
-    except Exception as e:
-        # Groq caído, rate limit, etc.: el cliente de voz recibe un mensaje, no una traza.
-        log.error("Falló la llamada al agente (Groq): %s", e)
-        confirmacion.descartar(
-            usuario_id
-        )  # no dejar una propuesta que el usuario nunca vio
-        return RespuestaAgente(
-            texto="Tuve un problema para responder. Intenta de nuevo en un momento."
-        )
+    resultado = None
+    for intento in range(REINTENTOS_RATE_LIMIT + 1):
+        try:
+            resultado = Crew(
+                agents=[agente], tasks=[tarea], verbose=False, tracing=False
+            ).kickoff()
+            break
+        except Exception as e:
+            # 429: el límite por minuto se libera solo; esperar y reintentar.
+            if "429" in str(e) and intento < REINTENTOS_RATE_LIMIT:
+                time.sleep(ESPERA_RATE_LIMIT_SEGUNDOS * 2**intento)
+                continue
+            # Groq caído, rate limit agotado, etc.: el cliente de voz recibe un mensaje, no una traza.
+            log.error("Falló la llamada al agente (Groq): %s", e)
+            confirmacion.descartar(
+                usuario_id
+            )  # no dejar una propuesta que el usuario nunca vio
+            return RespuestaAgente(
+                texto="Tuve un problema para responder. Intenta de nuevo en un momento."
+            )
     # kickoff() sin stream devuelve CrewOutput; el isinstance acota el tipo (también puede ser streaming)
     texto_respuesta = (
         resultado.raw if isinstance(resultado, CrewOutput) else str(resultado)
     )
+    pendiente = confirmacion.pendiente_id(usuario_id)
+    # Con propuesta pendiente, la pregunta de confirmación sale del código: lo que dijo el modelo
+    # podría no coincidir con lo que se guardó y lo que se ejecutará si el usuario dice que sí.
+    if pendiente is not None:
+        texto_respuesta = confirmacion.resumen(usuario_id) or texto_respuesta
+    elif PATRON_CONFIRMACION_SIN_PROPUESTA.search(texto_respuesta):
+        # Sin propuesta guardada, un "sí" después no crearía nada: no se deja decir que sí se confirma.
+        log.warning("El modelo pidió confirmación sin proponer evento")
+        texto_respuesta = MENSAJE_SIN_PROPUESTA
     return RespuestaAgente(
-        texto=texto_respuesta,
-        confirmacion_pendiente=confirmacion.pendiente_id(usuario_id),
+        texto=_para_voz(texto_respuesta), confirmacion_pendiente=pendiente
     )
+
+
+def _para_voz(texto: str) -> str:
+    """Quita saltos de línea y escribe "a. m." / "p. m." como "a.m." / "p.m." para el TTS."""
+    texto = re.sub(r"\b([ap])\. ?m\.", r"\1.m.", texto)
+    return " ".join(texto.split())
 
 
 def responder_falso(texto: str, usuario_id: str) -> RespuestaAgente:
