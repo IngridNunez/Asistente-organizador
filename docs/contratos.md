@@ -90,7 +90,8 @@ Toda acción sobre el PC (etapa 4) debe ser una función específica y acotada
 
 ```py
 POST /conversar
-  body: { "audio_base64": str, "usuario_id": str }
+  header: Authorization: Bearer <API_AUTH_TOKEN>
+  body: { "audio_base64": str }           # el usuario sale de API_USUARIO; un "usuario_id" en el body se ignora
   respuesta: { "texto_respuesta": str, "audio_base64": str }
 ```
 

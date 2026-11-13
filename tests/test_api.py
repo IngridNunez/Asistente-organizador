@@ -1,4 +1,5 @@
 import base64
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +18,7 @@ CABECERA = {"Authorization": f"Bearer {TOKEN}"}
 @pytest.fixture(autouse=True)
 def entorno(monkeypatch):
     monkeypatch.setenv("API_AUTH_TOKEN", TOKEN)
+    monkeypatch.setenv("API_USUARIO", "u1")
     monkeypatch.delenv("API_AUTH_DISABLED", raising=False)
 
 
@@ -29,6 +31,7 @@ def test_conversar():
 
 
 def test_sin_token_configurado_falla_cerrado(monkeypatch):
+    """Sin `API_AUTH_TOKEN` la API responde 503 aunque llegue un token."""
     monkeypatch.delenv("API_AUTH_TOKEN")
     respuesta = client.post("/conversar", json=CUERPO, headers=CABECERA)
     assert respuesta.status_code == 503
@@ -44,6 +47,7 @@ def test_token_incorrecto_o_ausente():
 
 
 def test_auth_desactivada_solo_con_bandera_explicita(monkeypatch):
+    """Con `API_AUTH_DISABLED=true` se atiende sin token; sin la bandera no."""
     monkeypatch.delenv("API_AUTH_TOKEN")
     monkeypatch.setenv("API_AUTH_DISABLED", "true")
     respuesta = client.post("/conversar", json=CUERPO)
@@ -75,8 +79,20 @@ def test_audio_demasiado_grande():
     assert respuesta.status_code == 422
 
 
-@pytest.mark.parametrize("usuario_id", ["", "../x", "a b", "x" * 65])
-def test_usuario_id_invalido(usuario_id):
-    cuerpo = {**CUERPO, "usuario_id": usuario_id}
-    respuesta = client.post("/conversar", json=cuerpo, headers=CABECERA)
-    assert respuesta.status_code == 422
+def test_usuario_sale_de_api_usuario_no_del_body(monkeypatch):
+    """El `usuario_id` que llega al agente es `API_USUARIO`; el del body se ignora."""
+    usados = []
+    monkeypatch.setattr("src.api.main.transcribir", lambda audio: "hola")
+    monkeypatch.setattr(
+        "src.api.main.responder",
+        lambda texto, usuario: usados.append(usuario) or SimpleNamespace(texto="ok"),
+    )
+    cuerpo = {**CUERPO, "usuario_id": "otro"}
+    assert client.post("/conversar", json=cuerpo, headers=CABECERA).status_code == 200
+    assert usados == ["u1"]
+
+
+def test_sin_api_usuario_falla_cerrado(monkeypatch):
+    """Con token válido pero sin `API_USUARIO` la API responde 503."""
+    monkeypatch.delenv("API_USUARIO")
+    assert client.post("/conversar", json=CUERPO, headers=CABECERA).status_code == 503
