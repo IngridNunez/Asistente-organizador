@@ -30,7 +30,7 @@ agente-voz/
 │   ├── agente/          # prompt, memoria, CrewAI
 │   ├── herramientas/    # Google Calendar, acceso al PC
 │   ├── api/             # FastAPI, endpoint /conversar
-│   └── interfaz/        # botón y pantalla (web/Telegram)
+│   └── interfaz/        # botón y pantalla (web)
 ├── tests/
 └── docs/
     ├── contratos.md     # firmas de funciones entre módulos
@@ -63,6 +63,21 @@ Correr los tests:
 ```bash
 pytest
 ```
+
+Conversar con el agente desde la consola (por ahora es por texto: no hay micrófono ni
+interfaz, y `hablar` aún usa `hablar_falso`):
+
+```powershell
+.venv\Scripts\activate
+python --version        # debe decir 3.12.x
+python conversar.py
+```
+
+Escribe tu mensaje después de `tú>` y Sara responde en `sara>`. Si pide confirmación
+para una acción delicada verás `(esperando tu sí o no)`. Para terminar, escribe `salir`.
+
+El código Python debe ejecutarse con `python`; no se debe pegar directamente
+en PowerShell.
 
 ## Equipo y roles
 
@@ -109,6 +124,5 @@ que cada equipo puede usar mientras el módulo real no está listo.
 
 ## Pendiente por decidir
 
-- Interfaz definitiva (web o Telegram).
 - Funciones de celular que se necesitan (define si hace falta una app Android).
 - Entrega estimada: dentro de 7 semanas aprox. (ajustar cronograma de `docs/etapa1.md` en adelante).
