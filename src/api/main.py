@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 # Hoy se importan las versiones "_falso": cada grupo las reemplaza por las
 # reales a medida que termina, sin tocar este archivo más que el import.
-from src.agente.agente import responder_falso
-from src.voz.stt import transcribir_falso
+from src.agente.agente import responder
+from src.voz.stt import transcribir
 from src.voz.tts import hablar_falso
 
 app = FastAPI()
@@ -18,11 +18,11 @@ app = FastAPI()
 MAX_AUDIO_BASE64 = 10_000_000
 
 
-# Esquema del body que espera POST /conversar
+# Esquema del body que espera POST /conversar. El usuario sale de API_USUARIO, no del body.
 class ConversarRequest(BaseModel):
+    """Body de POST /conversar. Un `usuario_id` enviado aquí se ignora."""
+
     audio_base64: str = Field(max_length=MAX_AUDIO_BASE64)
-    # usuario_id será la clave de la memoria del agente: formato acotado
-    usuario_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.@-]+$")
 
 
 # Esquema de la respuesta de POST /conversar
@@ -31,11 +31,29 @@ class ConversarResponse(BaseModel):
     audio_base64: str
 
 
+# Usuario fijo de esta instalación. Falla cerrado: sin API_USUARIO no se atiende a nadie.
+def _usuario_fijo() -> str:
+    """Devuelve `API_USUARIO`, el único usuario de esta instalación.
+
+    Raises:
+        HTTPException: 503 si `API_USUARIO` no está configurado.
+    """
+    usuario = os.getenv("API_USUARIO", "").strip()
+    if not usuario:
+        raise HTTPException(status_code=503, detail="Usuario no configurado")
+    return usuario
+
+
 # Exige "Authorization: Bearer <API_AUTH_TOKEN>". Falla cerrado: sin token configurado
 # no se atiende a nadie, salvo API_AUTH_DISABLED=true (solo desarrollo local).
-def _verificar_token(authorization: str = Header(default="")) -> None:
+def _verificar_token(authorization: str = Header(default="")) -> str:
+    """Valida el header `Authorization` y devuelve el usuario de la instalación.
+
+    Raises:
+        HTTPException: 503 si falta el token o `API_USUARIO`; 401 si el token no coincide.
+    """
     if os.getenv("API_AUTH_DISABLED", "").lower() in ("1", "true", "yes"):
-        return
+        return _usuario_fijo()
     token_esperado = os.getenv("API_AUTH_TOKEN")
     if not token_esperado:
         raise HTTPException(status_code=503, detail="Autenticación no configurada")
@@ -44,16 +62,18 @@ def _verificar_token(authorization: str = Header(default="")) -> None:
         authorization.encode(), f"Bearer {token_esperado}".encode()
     ):
         raise HTTPException(status_code=401, detail="No autorizado")
+    return _usuario_fijo()
 
 
 # Endpoint principal: recibe audio, devuelve texto y audio de respuesta.
 # La dependencia del token corre antes de validar el body: sin token válido siempre es 401/503.
-@app.post(
-    "/conversar",
-    response_model=ConversarResponse,
-    dependencies=[Depends(_verificar_token)],
-)
-def conversar(req: ConversarRequest):
+@app.post("/conversar", response_model=ConversarResponse)
+def conversar(req: ConversarRequest, usuario_id: str = Depends(_verificar_token)):
+    """Encadena transcribir -> responder -> hablar para un audio de entrada.
+
+    El `usuario_id` viene de `API_USUARIO`, nunca del body. Raises HTTPException 400 si el
+    audio no es base64 válido.
+    """
     # audio llega en base64 (JSON no soporta bytes crudos). Se quitan espacios y saltos de línea:
     # Android con Base64.DEFAULT inserta "\n" cada 76 caracteres.
     try:
@@ -62,8 +82,8 @@ def conversar(req: ConversarRequest):
         raise HTTPException(status_code=400, detail="audio_base64 inválido")
 
     # Pipeline: voz -> texto -> respuesta del agente -> voz
-    texto = transcribir_falso(audio)
-    texto_respuesta = responder_falso(texto, req.usuario_id).texto
+    texto = transcribir(audio)
+    texto_respuesta = responder(texto, usuario_id).texto
     audio_respuesta = hablar_falso(texto_respuesta)
 
     return ConversarResponse(

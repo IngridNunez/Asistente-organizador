@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import InstalledAppFlow, WSGITimeoutError
 from googleapiclient.discovery import build
 
 # Versión real de las herramientas de calendario (mismas firmas que calendario_falso.py,
@@ -25,6 +25,10 @@ ZONA_HORARIA = "America/Santiago"
 RUTA_TOKEN = Path(
     os.getenv("GOOGLE_TOKEN_PATH") or Path.home() / ".sara" / "token.json"
 )
+
+# Cuánto se espera a que alguien autorice en el navegador. Sin límite, una petición de la API
+# quedaría colgada para siempre en una máquina que no tenga el token guardado.
+SEGUNDOS_AUTORIZACION = 120
 
 MAX_EVENTOS = 50  # tope de eventos que se le devuelven al agente por consulta
 MAX_CHARS_TITULO = (
@@ -61,7 +65,16 @@ def _credenciales() -> Credentials:
         }
         flow = InstalledAppFlow.from_client_config(config, SCOPES)
         # Con una app de escritorio siempre devuelve Credentials; cast() solo acota el tipo.
-        creds = cast("Credentials", flow.run_local_server(port=0))
+        try:
+            creds = cast(
+                "Credentials",
+                flow.run_local_server(port=0, timeout_seconds=SEGUNDOS_AUTORIZACION),
+            )
+        except WSGITimeoutError as e:
+            raise RuntimeError(
+                "No se autorizó Google Calendar a tiempo. "
+                "Autoriza con: python -m src.herramientas.calendario"
+            ) from e
 
     RUTA_TOKEN.parent.mkdir(parents=True, exist_ok=True)
     RUTA_TOKEN.write_text(creds.to_json())

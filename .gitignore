@@ -12,7 +12,13 @@ audios_tmp/
 # memoria local de cada persona
 .projectmem/
 
+# logs locales (no se suben)
+logs/
+
 # credenciales y tokens de Google (nunca se suben)
 credentials.json
 client_secret*.json
 token.json
+
+# Audios de prueba locales (incluyen voces personales)
+tests/audios/

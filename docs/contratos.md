@@ -68,10 +68,34 @@ necesidad de correlacionar across dispositivos. Cuando el celular se vuelva un
 cliente remoto real, este estado va a tener que moverse a donde el agente
 (servidor) pueda verlo sin depender de que el mismo proceso siga vivo.
 
+### Memoria de conversación
+
+`responder()` usa la memoria de `src/agente/memoria.py`: guarda los últimos 3
+turnos de cada `usuario_id` y los incluye en el siguiente turno. Hoy vive en la
+RAM del proceso, así que se pierde al reiniciar.
+
+```python
+def guardar_turno(usuario_id: str, usuario_texto: str, asistente_texto: str) -> None:
+    """Guarda un turno; si hay más de 3, descarta el más antiguo."""
+
+def obtener_historial(usuario_id: str) -> list[TurnoConversacion]:
+    """Devuelve una copia de los turnos guardados (máximo 3)."""
+
+def obtener_historial_formateado(usuario_id: str) -> str:
+    """Devuelve el historial como texto para el prompt; vacío si no hay."""
+
+def cantidad_conversaciones(usuario_id: str) -> int:
+    """Devuelve cuántos turnos hay guardados (0 a 3)."""
+
+def limpiar_memoria(usuario_id: str | None = None) -> None:
+    """Borra la memoria de un usuario, o de todos si no se indica."""
+```
+
 ## Herramientas
 
-Cada herramienta que usa el agente sigue la interfaz de "tool" de LangChain:
-nombre, descripción y función con entradas/salidas tipadas. Ejemplos:
+Las funciones de `src/herramientas/` son funciones normales, con entradas y
+salidas tipadas. El agente las expone al modelo con `@tool` de CrewAI en
+`src/agente/tools.py`. Ejemplos:
 
 ```python
 def crear_evento_calendario(titulo: str, inicio: str, fin: str) -> str:
@@ -90,7 +114,8 @@ Toda acción sobre el PC (etapa 4) debe ser una función específica y acotada
 
 ```py
 POST /conversar
-  body: { "audio_base64": str, "usuario_id": str }
+  header: Authorization: Bearer <API_AUTH_TOKEN>
+  body: { "audio_base64": str }           # el usuario sale de API_USUARIO; un "usuario_id" en el body se ignora
   respuesta: { "texto_respuesta": str, "audio_base64": str }
 ```
 
@@ -116,7 +141,7 @@ Cada equipo agrega, en su propio módulo, una versión falsa de lo que todavía
 no existe, por ejemplo:
 
 ```python
-# src/agente/calendario_falso.py
+# src/herramientas/calendario_falso.py
 def listar_eventos(desde, hasta):
     return [{"titulo": "Reunión de prueba", "inicio": desde, "fin": desde}]
 ```

@@ -160,3 +160,27 @@ def test_sin_token_ni_client_id_falla_claro_sin_abrir_el_navegador(monkeypatch, 
     monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
     with pytest.raises(RuntimeError, match="GOOGLE_CLIENT_ID"):
         calendario._credenciales()
+
+
+# Si nadie autoriza en el navegador, se deja de esperar y se avisa cómo autorizar:
+# sin límite, una petición de la API quedaría colgada para siempre.
+def test_autorizacion_sin_respuesta_falla_con_mensaje_y_con_limite_de_espera(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(calendario, "RUTA_TOKEN", tmp_path / "no_existe" / "token.json")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "id-de-prueba")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secreto-de-prueba")
+
+    flujo = MagicMock()
+    flujo.run_local_server.side_effect = calendario.WSGITimeoutError("sin respuesta")
+    monkeypatch.setattr(
+        calendario.InstalledAppFlow, "from_client_config", lambda *a, **k: flujo
+    )
+
+    with pytest.raises(RuntimeError, match="python -m src.herramientas.calendario"):
+        calendario._credenciales()
+    # Se pidió un tiempo máximo (no se espera para siempre) y no se guardó ningún token.
+    assert flujo.run_local_server.call_args.kwargs["timeout_seconds"] == (
+        calendario.SEGUNDOS_AUTORIZACION
+    )
+    assert not calendario.RUTA_TOKEN.exists()
