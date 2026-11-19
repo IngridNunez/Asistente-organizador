@@ -30,7 +30,9 @@ agente-voz/
 │   ├── agente/          # prompt, memoria, CrewAI
 │   ├── herramientas/    # Google Calendar, acceso al PC
 │   ├── api/             # FastAPI, endpoint /conversar
-│   └── interfaz/        # botón y pantalla (web)
+│   └── interfaz/
+│       ├── __init__.py
+│       └── web/         # cliente React + Vite
 ├── tests/
 └── docs/
     ├── contratos.md     # firmas de funciones entre módulos
@@ -57,6 +59,29 @@ Levantar la API:
 ```bash
 uvicorn src.api.main:app --reload
 ```
+
+Levantar la interfaz web en otra terminal:
+
+```powershell
+cd src\interfaz\web
+npm install
+npm run dev
+```
+
+La interfaz usa el proxy local de Vite para llamar a la API. Configura
+`API_AUTH_TOKEN` en el `.env` de la raíz para que el proxy lo agregue en el
+servidor, nunca en el navegador; `API_URL` puede apuntar a otra dirección de API.
+Para desarrollo local también se puede configurar `API_AUTH_DISABLED=true` en
+la API, siguiendo las restricciones de `.env.example`. El micrófono requiere
+`localhost` o un origen HTTPS.
+
+La interfaz manda audio WAV a `POST /conversar`. El TTS actual es un stub y
+devuelve audio vacío, por lo que la respuesta se muestra como texto hasta que se
+integre voz real. El endpoint no devuelve metadatos estructurados de
+confirmación; si la respuesta termina en pregunta, la interfaz invita a
+responder por voz, sin afirmar que una acción se haya ejecutado.
+
+Más detalles: [`docs/interfaz-web.md`](docs/interfaz-web.md).
 
 Correr los tests:
 

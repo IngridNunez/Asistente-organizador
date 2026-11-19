@@ -1,7 +1,7 @@
 # Python 3.12
 
 # Agente y LLM (CrewAI orquesta; en Windows usar Python 3.12 en .venv)
-crewai==1.15.37
+crewai==1.15.41
 # Los usan los demás grupos (Persona B, herramientas); este módulo solo usa crewai
 langchain==1.4.9
 langchain-openai==1.7.4
@@ -27,3 +27,4 @@ httpx==0.28.1
 # Interfaz: python-telegram-bot (opción Telegram)
 # TTS: edge-tts
 # TTS: piper-tts
+

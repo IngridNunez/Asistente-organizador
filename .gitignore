@@ -8,6 +8,9 @@ __pycache__/
 *.wav
 *.mp3
 audios_tmp/
+node_modules/
+dist/
+src/interfaz/web/.env*
 
 # memoria local de cada persona
 .projectmem/
